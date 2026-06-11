@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f7efe2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>난타 연주 — 난타북 웹앱</title>
+<style>
+  /* ============================================================
+     난타 연주 웹앱 스타일
+     - 모바일 세로 화면 우선, 데스크톱 대응
+     - 스크롤/더블탭 확대/롱프레스 메뉴 방지
+     ============================================================ */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    position: fixed; inset: 0; overflow: hidden;
+    background: linear-gradient(180deg, #fbf7ee 0%, #f4ead7 60%, #eddfc6 100%);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    color: #2a1c10;
+    touch-action: none;
+    user-select: none; -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+
+  /* ---------- 연주 캔버스 ---------- */
+  #stage {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block; touch-action: none; cursor: pointer;
+  }
+
+  /* ---------- 상단 HUD ---------- */
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    pointer-events: none;
+  }
+  #hud .brand { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 17px; letter-spacing: -0.3px; }
+  #hud .brand img { height: 30px; width: auto; }
+  #hud .spacer { flex: 1; }
+  #hud .stat {
+    pointer-events: none;
+    background: rgba(255,255,255,0.72); backdrop-filter: blur(6px);
+    border: 1px solid rgba(42,28,16,0.10);
+    border-radius: 999px; padding: 7px 14px;
+    font-size: 13px; font-weight: 800; color: #5d452c; white-space: nowrap;
+  }
+  #hud .stat b { color: #2a1c10; font-variant-numeric: tabular-nums; }
+  .hud-btn {
+    pointer-events: auto;
+    width: 44px; height: 44px; flex: 0 0 auto;
+    border-radius: 13px; border: 1px solid rgba(42,28,16,0.14);
+    background: rgba(255,255,255,0.82); backdrop-filter: blur(6px);
+    font-size: 20px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(80,50,20,0.10);
+    transition: transform 120ms ease;
+  }
+  .hud-btn:active { transform: scale(0.92); }
+
+  /* ---------- 하단 안내 ---------- */
+  #bottomHint {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 5; pointer-events: none;
+    background: rgba(255,255,255,0.72); backdrop-filter: blur(6px);
+    border: 1px solid rgba(42,28,16,0.08);
+    padding: 9px 18px; border-radius: 999px;
+    font-size: 13px; font-weight: 700; color: #5d452c;
+    white-space: nowrap; max-width: 94vw; overflow: hidden; text-overflow: ellipsis;
+  }
+  #bottomHint b.bass { color: #b35a17; }
+  #bottomHint b.slap { color: #c0392b; }
+
+  /* ---------- 시작 화면 오버레이 ---------- */
+  #introOverlay {
+    position: absolute; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,0.92) 0%, rgba(250,243,229,0.96) 55%, rgba(240,228,204,0.97) 100%);
+    overflow-y: auto;
+  }
+  .intro-card {
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(42,28,16,0.08);
+    border-radius: 28px;
+    padding: 26px 22px 22px;
+    width: 100%; max-width: 430px;
+    text-align: center;
+    box-shadow: 0 24px 70px rgba(80,50,20,0.16);
+  }
+  .intro-icon { height: 72px; width: auto; margin-bottom: 6px; }
+  .intro-card h1 { font-size: 32px; font-weight: 900; letter-spacing: -0.8px; }
+  .intro-sub { margin-top: 6px; font-size: 14.5px; font-weight: 600; color: #7a5f41; }
+  .intro-guide {
+    width: min(210px, 56%); height: auto; margin: 16px auto 4px; display: block;
+    filter: drop-shadow(0 10px 22px rgba(80,50,20,0.18));
+  }
+  .tone-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .tone-card {
+    border-radius: 16px; padding: 12px 10px;
+    background: #fdf8ef; border: 1px solid rgba(42,28,16,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .tone-card b { font-size: 14px; }
+  .tone-card span { font-size: 12.5px; color: #7a5f41; font-weight: 600; }
+  .tone-dot { width: 14px; height: 14px; border-radius: 50%; margin-bottom: 2px; }
+  .tone-dot.bass { background: #b35a17; box-shadow: 0 0 0 4px rgba(179,90,23,0.15); }
+  .tone-dot.slap { background: #c0392b; box-shadow: 0 0 0 4px rgba(192,57,43,0.15); }
+  #startBtn {
+    margin-top: 18px; width: 100%; min-height: 58px;
+    border: none; border-radius: 18px; cursor: pointer;
+    background: linear-gradient(135deg, #c2571b, #8a3d12);
+    color: #fff; font-size: 19px; font-weight: 900; letter-spacing: -0.3px;
+    box-shadow: 0 12px 30px rgba(160,80,20,0.35);
+    transition: transform 120ms ease;
+    font-family: inherit;
+  }
+  #startBtn:active { transform: scale(0.97); }
+  .intro-help { margin-top: 14px; font-size: 12.5px; line-height: 1.7; color: #8a7050; font-weight: 600; }
+  .intro-help b { color: #5d452c; background: #f3e9d8; border-radius: 6px; padding: 1px 6px; }
+
+  .hidden { display: none !important; }
+
+  /* 터치 전용 기기에서는 키보드 안내 숨김 */
+  @media (pointer: coarse) {
+    .kbd-only { display: none; }
+  }
+
+  /* ============================================================
+     리듬 게임 UI — 선택 화면 / 모달 / HUD 확장
+     ============================================================ */
+  .screen { position: absolute; inset: 0; z-index: 30; background: rgba(252,248,240,0.97); overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+  .rs-header { display: flex; align-items: center; gap: 12px; max-width: 960px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 16px 4px; }
+  .rs-header h2 { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
+  .rs-header p { font-size: 12.5px; color: #8a7050; font-weight: 600; margin-top: 2px; }
+  .rs-tabs { display: flex; gap: 8px; overflow-x: auto; max-width: 960px; margin: 10px auto; padding: 0 16px 6px; scrollbar-width: none; }
+  .rs-tabs::-webkit-scrollbar { display: none; }
+  .rs-tabs button { min-height: 40px; padding: 0 15px; border-radius: 999px; border: 1px solid rgba(42,28,16,0.14); background: #fff; font-weight: 800; font-size: 13.5px; white-space: nowrap; cursor: pointer; color: #5d452c; font-family: inherit; }
+  .rs-tabs button.active { background: #2a1c10; color: #fff; border-color: #2a1c10; }
+  .rs-layout { max-width: 960px; margin: 0 auto; display: grid; grid-template-columns: minmax(0,1.12fr) minmax(290px,0.88fr); gap: 14px; padding: 0 16px calc(26px + env(safe-area-inset-bottom)); }
+  .rs-cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; align-content: start; }
+  .r-card { position: relative; text-align: left; border: 1.5px solid rgba(42,28,16,0.12); background: rgba(255,255,255,0.9); border-radius: 18px; padding: 13px 14px; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; font-family: inherit; }
+  .r-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(80,50,20,0.10); }
+  .r-card.selected { border-color: #2a1c10; box-shadow: 0 0 0 3px rgba(42,28,16,0.10), 0 14px 34px rgba(80,50,20,0.12); }
+  .r-card h3 { font-size: 15.5px; font-weight: 900; margin: 7px 0 1px; color: #2a1c10; }
+  .r-card .en { font-size: 11px; color: #a08866; font-weight: 700; }
+  .r-card .desc { font-size: 12px; color: #7a5f41; margin-top: 4px; line-height: 1.45; }
+  .r-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .diff-badge { display: inline-block; font-size: 11px; font-weight: 900; color: #fff; border-radius: 999px; padding: 3px 9px; }
+  .stars { font-size: 11px; color: #e8a013; letter-spacing: 1px; }
+  .r-meta { display: flex; gap: 8px; font-size: 11px; color: #8a7050; font-weight: 700; margin-top: 7px; flex-wrap: wrap; }
+  .r-rec { font-size: 11.5px; font-weight: 800; margin-top: 6px; color: #5d452c; }
+  .reco-badge { position: absolute; top: -8px; right: 10px; background: #e8a013; color: #fff; font-size: 10.5px; font-weight: 900; padding: 3px 8px; border-radius: 999px; box-shadow: 0 4px 10px rgba(232,160,19,0.4); }
+  .done-check { color: #3f9d4e; font-weight: 900; }
+  .rs-detail { position: sticky; top: 12px; align-self: start; background: rgba(255,255,255,0.94); border: 1px solid rgba(42,28,16,0.10); border-radius: 22px; padding: 16px; box-shadow: 0 14px 36px rgba(80,50,20,0.10); }
+  .rs-detail h3 { font-size: 19px; font-weight: 900; margin-top: 6px; }
+  .rs-detail .en { color: #a08866; font-size: 12px; font-weight: 700; }
+  .d-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin: 12px 0; }
+  .d-grid div { background: #faf4e8; border-radius: 12px; padding: 8px 4px; text-align: center; }
+  .d-grid strong { display: block; font-size: 15px; font-weight: 900; }
+  .d-grid span { font-size: 10.5px; color: #8a7050; font-weight: 700; }
+  .rs-detail h4 { font-size: 12.5px; margin: 12px 0 4px; color: #5d452c; }
+  .rs-detail .desc { font-size: 13px; line-height: 1.55; color: #4a3a26; }
+  .rs-detail ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: #7a5f41; line-height: 1.65; text-align: left; }
+  #rsPreviewCanvas { width: 100%; height: auto; background: #faf4e8; border-radius: 12px; }
+  .record-line { font-size: 12.5px; font-weight: 800; color: #5d452c; background: #faf4e8; border-radius: 10px; padding: 8px 10px; margin-top: 4px; }
+  .rs-actions { display: grid; gap: 8px; margin-top: 14px; }
+  .btn-primary { min-height: 50px; border: none; border-radius: 14px; background: linear-gradient(135deg,#c2571b,#8a3d12); color: #fff; font-size: 16px; font-weight: 900; cursor: pointer; font-family: inherit; box-shadow: 0 8px 22px rgba(160,80,20,0.28); transition: transform .12s; }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-secondary { min-height: 46px; border: 1.5px solid rgba(42,28,16,0.16); border-radius: 14px; background: #fff; color: #3c2a18; font-size: 14.5px; font-weight: 800; cursor: pointer; font-family: inherit; transition: transform .12s; }
+  .btn-secondary:active { transform: scale(0.97); }
+  .btn-row { display: grid; gap: 9px; margin-top: 14px; }
+  .btn-row.two { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 760px) {
+    .rs-layout { display: block; }
+    .rs-detail { position: static; margin-top: 12px; }
+  }
+  @media (max-width: 480px) { .rs-cards { grid-template-columns: 1fr; } }
+
+  /* ---------- 모달 공통 ---------- */
+  .modal-back { position: absolute; inset: 0; z-index: 40; background: rgba(40,25,12,0.45); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .modal { background: #fffdf8; border-radius: 24px; padding: 24px 20px; width: 100%; max-width: 430px; box-shadow: 0 24px 70px rgba(60,35,10,0.30); border: 1px solid rgba(42,28,16,0.08); text-align: center; max-height: 86vh; overflow-y: auto; }
+  .modal h2 { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
+
+  /* ---------- 설정 ---------- */
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 2px; border-bottom: 1px solid rgba(42,28,16,0.07); font-size: 14px; font-weight: 800; color: #3c2a18; }
+  .set-row .ctl { display: flex; align-items: center; gap: 8px; }
+  .set-row input[type="range"] { width: 130px; accent-color: #b35a17; }
+  .set-row .val { font-size: 12px; color: #8a7050; min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+  .seg { display: flex; border: 1.5px solid rgba(42,28,16,0.16); border-radius: 10px; overflow: hidden; }
+  .seg button { border: none; background: #fff; padding: 7px 11px; font-size: 12.5px; font-weight: 800; cursor: pointer; color: #5d452c; font-family: inherit; }
+  .seg button.active { background: #2a1c10; color: #fff; }
+  .switch { width: 46px; height: 26px; border-radius: 999px; border: none; cursor: pointer; position: relative; background: #d8cbb6; transition: background .15s; flex: 0 0 auto; }
+  .switch.on { background: #b35a17; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+  .switch.on::after { left: 23px; }
+
+  /* ---------- 결과 ---------- */
+  .grade-circle { width: 86px; height: 86px; border-radius: 50%; margin: 12px auto 6px; display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; color: #fff; box-shadow: 0 12px 30px rgba(80,50,20,0.25); }
+  .res-rhythm { font-size: 13px; font-weight: 800; color: #8a7050; }
+  .res-score { font-size: 34px; font-weight: 900; letter-spacing: -1px; margin-top: 2px; }
+  .new-best { display: inline-block; background: #e8a013; color: #fff; font-size: 10.5px; font-weight: 900; border-radius: 999px; padding: 2px 8px; vertical-align: middle; margin-left: 6px; }
+  .res-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin: 12px 0 4px; }
+  .res-grid div { background: #faf4e8; border-radius: 12px; padding: 8px 2px; }
+  .res-grid strong { display: block; font-size: 16px; font-weight: 900; }
+  .res-grid span { font-size: 10.5px; font-weight: 800; }
+  .tone-rates { display: grid; gap: 6px; margin: 10px 0; text-align: left; }
+  .tone-rate { font-size: 12px; font-weight: 800; color: #5d452c; }
+  .tone-rate .bar { height: 8px; border-radius: 999px; background: #f0e6d4; overflow: hidden; margin-top: 3px; }
+  .tone-rate .bar i { display: block; height: 100%; border-radius: 999px; }
+  .res-feedback { font-size: 13.5px; font-weight: 700; color: #4a3a26; line-height: 1.55; margin: 10px 0 2px; }
+  .res-reco { font-size: 12.5px; font-weight: 800; color: #8a7050; margin-top: 6px; }
+
+  /* ---------- 게임 진행 바 ---------- */
+  #progressBar { position: absolute; top: 0; left: 0; right: 0; height: 4px; z-index: 6; background: rgba(42,28,16,0.08); }
+  #progressBar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#c2571b,#e8a013); transition: width .2s linear; }
+
+  @media (max-height: 600px) {
+    .intro-guide { width: 130px; }
+    .intro-card h1 { font-size: 26px; }
+    .intro-card { padding: 18px 18px 16px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== 상단 HUD ===== -->
+  <header id="hud">
+    <div class="brand">
+      <img id="hudIcon" src="assets/icon-nanta.png" alt="" onerror="this.style.display='none'">
+      <span>난타 연주</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="stat" id="freeStat">베이스 <b id="bassCount">0</b> · 슬랩 <b id="slapCount">0</b></div>
+    <div class="stat hidden" id="gameStat"><b id="scoreVal">0</b>점 · <b id="accVal">100%</b></div>
+    <button class="hud-btn hidden" id="pauseBtn" aria-label="일시정지">⏸</button>
+    <button class="hud-btn" id="muteBtn" aria-label="소리 켜기/끄기">🔊</button>
+    <button class="hud-btn" id="helpBtn" aria-label="도움말 보기">❔</button>
+  </header>
+
+  <!-- ===== 게임 진행 바 ===== -->
+  <div id="progressBar" class="hidden"><i id="progressFill"></i></div>
+
+  <!-- ===== 연주 캔버스 ===== -->
+  <canvas id="stage" aria-label="난타북 연주 영역. 중앙을 치면 베이스톤, 테두리를 치면 슬랩톤이 납니다."></canvas>
+
+  <!-- ===== 하단 안내 ===== -->
+  <div id="bottomHint"></div>
+
+  <!-- ===== 시작 화면 ===== -->
+  <section id="introOverlay" aria-label="시작 화면">
+    <div class="intro-card">
+      <img class="intro-icon" src="assets/icon-nanta.png" alt="난타북 아이콘" onerror="this.style.display='none'">
+      <h1>난타 연주</h1>
+      <p class="intro-sub">난타북을 직접 두드리며 리듬을 즐겨보세요</p>
+      <img class="intro-guide" src="assets/pose-guide.png" alt="난타북 위에 난타채 두 개가 세모꼴로 놓인 기본 자세" onerror="this.style.display='none'">
+      <div class="tone-cards">
+        <div class="tone-card">
+          <div class="tone-dot bass"></div>
+          <b>중앙 · 베이스톤</b>
+          <span>“둥” 묵직한 울림</span>
+        </div>
+        <div class="tone-card">
+          <div class="tone-dot slap"></div>
+          <b>테두리 · 슬랩톤</b>
+          <span>“딱” 경쾌한 타격</span>
+        </div>
+      </div>
+      <button id="startBtn">🥁 리듬 게임 시작</button>
+      <div class="btn-row two">
+        <button id="freePlayBtn" class="btn-secondary">🎵 자유 연주</button>
+        <button id="settingsBtn" class="btn-secondary">⚙️ 설정</button>
+      </div>
+      <p class="intro-help">
+        마우스 클릭 또는 화면 터치로 연주합니다<br>
+        <span class="kbd-only">키보드 <b>F</b>·<b>J</b> 베이스 · <b>D</b>·<b>K</b> 슬랩 · <b>Space</b> 양손 베이스</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== 리듬 선택 화면 ===== -->
+  <section id="rhythmSelect" class="screen hidden" aria-label="리듬 선택 화면">
+    <header class="rs-header">
+      <button class="hud-btn" id="rsBackBtn" aria-label="시작 화면으로 돌아가기">←</button>
+      <div>
+        <h2>리듬 선택</h2>
+        <p>난이도에 맞는 난타 리듬을 골라보세요</p>
+      </div>
+    </header>
+    <nav class="rs-tabs" id="rsTabs" aria-label="난이도 필터">
+      <button data-diff="all" class="active">전체</button>
+      <button data-diff="intro">🌱 입문</button>
+      <button data-diff="beginner">🥁 초급</button>
+      <button data-diff="intermediate">🔥 중급</button>
+      <button data-diff="advanced">⚡ 고급</button>
+    </nav>
+    <main class="rs-layout">
+      <section class="rs-cards" id="rsCards" aria-label="리듬 목록"></section>
+      <aside class="rs-detail" id="rsDetail" aria-label="선택한 리듬 상세 정보"></aside>
+    </main>
+  </section>
+
+  <!-- ===== 일시정지 모달 ===== -->
+  <div id="pauseModal" class="modal-back hidden">
+    <div class="modal">
+      <h2>⏸ 일시정지</h2>
+      <div class="btn-row">
+        <button id="resumeBtn" class="btn-primary">계속하기</button>
+        <button id="restartBtn" class="btn-secondary">처음부터 다시</button>
+        <button id="quitBtn" class="btn-secondary">리듬 선택으로</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 결과 모달 ===== -->
+  <div id="resultModal" class="modal-back hidden">
+    <div class="modal" id="resultBody"></div>
+  </div>
+
+  <!-- ===== 설정 모달 ===== -->
+  <div id="settingsModal" class="modal-back hidden">
+    <div class="modal">
+      <h2>⚙️ 설정</h2>
+      <div class="set-row">
+        <span>음량</span>
+        <span class="ctl"><input type="range" id="setVolume" min="0" max="100" step="5"><span class="val" id="setVolumeVal"></span></span>
+      </div>
+      <div class="set-row">
+        <span>노트 속도</span>
+        <span class="seg" id="setSpeed">
+          <button data-v="slow">느림</button><button data-v="normal">보통</button><button data-v="fast">빠름</button>
+        </span>
+      </div>
+      <div class="set-row">
+        <span>판정 오프셋</span>
+        <span class="ctl"><input type="range" id="setOffset" min="-150" max="150" step="5"><span class="val" id="setOffsetVal"></span></span>
+      </div>
+      <div class="set-row">
+        <span>박자 가이드음</span>
+        <button class="switch" id="setTick" aria-label="박자 가이드음 켜기/끄기"></button>
+      </div>
+      <div class="set-row" style="border-bottom:none">
+        <span>터치 진동</span>
+        <button class="switch" id="setVibrate" aria-label="터치 진동 켜기/끄기"></button>
+      </div>
+      <div class="btn-row"><button id="settingsClose" class="btn-primary">닫기</button></div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   난타 연주 웹앱
+   - 중앙 타격: 베이스톤("둥") / 테두리 타격: 슬랩톤("딱")
+   - 난타채 2개가 세모꼴로 북 위에 놓여 있고, 입력 지점을 향해 타격
+   - 오디오 파일 없이 Web Audio API로 북 사운드를 합성 (지연 최소화)
+   - 이미지 에셋이 없어도 Canvas 대체 그래픽으로 동작
+   ============================================================ */
+
+/* ---------- 에셋 매니페스트: 파일명을 바꾸려면 여기만 수정 ---------- */
+const ASSETS = {
+  drumHead: "assets/drum-head.png",   // 북면 실사(탑뷰)
+  icon:     "assets/icon-nanta.png",  // 난타북 아이콘
+  pose:     "assets/pose-guide.png"   // 기본 자세 안내(시작 화면)
+};
+
+/* ---------- 주요 튜닝 값 ---------- */
+const CONFIG = {
+  drum: {
+    cyRatio: 0.55,        // 화면 높이 대비 북 중심 y 위치
+    radiusRatioW: 0.44,   // 화면 너비 대비 북 반지름 비율
+    radiusRatioH: 0.37,   // 화면 높이 대비 북 반지름 비율
+    bassZoneRatio: 0.63,  // 이 비율 안쪽 = 베이스톤(중앙)
+    hitOuterRatio: 1.12   // 이 비율 바깥 클릭은 무시
+  },
+  photo: {                // 사진 속 북면 원의 위치(이미지 크기 대비 비율) — 사진 교체 시 보정
+    cx: 0.496, cy: 0.482,    // 북면 중심 (이미지 너비/높이 대비)
+    rx: 0.437, ry: 0.427,    // 북면 반지름 (가로는 너비, 세로는 높이 대비 — 타원 보정)
+    overscan: 1.03           // 가장자리 투명 픽셀이 보이지 않도록 살짝 확대
+  },
+  stick: {
+    lengthRatio: 1.06,    // 북 반지름 대비 난타채 길이
+    restTipGap: 0.075,    // 휴지 자세에서 채 끝이 중심에서 벌어진 정도(세모꼴 꼭짓점 간격)
+    restTipY: -0.13,      // 휴지 자세 채 끝 y 오프셋
+    restAngleDeg: 58,     // 휴지 자세 기울기(수평 기준) — 세모꼴 각도
+    maxSwingDeg: 60,      // 타격 시 휴지 각도에서 최대 회전 허용치
+    strikeMs: 70,         // 타격 도달 시간
+    holdMs: 60,           // 타격 후 머무는 시간
+    returnMs: 260         // 제자리로 복귀하는 시간
+  },
+  particle: { max: 220 },
+  audio: { masterGain: 0.9 }
+};
+
+/* ---------- 공용 유틸 ---------- */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeInOutQuad = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+/* 최단 경로 각도 보간 */
+function lerpAngle(a, b, t) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
+
+/* ============================================================
+   AudioEngine — Web Audio API 합성 사운드
+   - 사용자 제스처 이후에만 AudioContext 생성/resume
+   - 베이스톤: 낮게 떨어지는 사인파 + 저역 노이즈 어택 (둥)
+   - 슬랩톤: 밴드패스 노이즈 크랙 + 짧은 우드 톤 (딱)
+   ============================================================ */
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.bus = null;      // 컴프레서 입력(개별 사운드 연결 지점)
+    this.master = null;   // 마스터 게인(음소거 제어)
+    this.noiseBuf = null;
+    this.muted = false;
+    this.volume = CONFIG.audio.masterGain; // 설정에서 조절되는 기본 음량
+  }
+
+  /* 첫 제스처에서 호출 — 이미 만들어졌으면 resume만 */
+  ensure() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { console.warn("[난타] Web Audio 미지원 브라우저입니다."); return; }
+      this.ctx = new AC({ latencyHint: "interactive" });
+
+      // 동시 다타 시 클리핑 방지용 컴프레서 → 마스터 게인
+      const comp = this.ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.knee.value = 24;
+      comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.12;
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.muted ? 0 : this.volume;
+      comp.connect(this.master).connect(this.ctx.destination);
+      this.bus = comp;
+
+      // 노이즈 버퍼(1초) 미리 생성 — 매 타격마다 재사용
+      const len = this.ctx.sampleRate;
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ch = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    }
+    if (this.ctx.state === "suspended") this.ctx.resume();
+  }
+
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.value = m ? 0 : this.volume;
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master && !this.muted) this.master.gain.value = v;
+  }
+
+  _noiseSrc() {
+    const s = this.ctx.createBufferSource();
+    s.buffer = this.noiseBuf;
+    return s;
+  }
+
+  /* 베이스톤 "둥" — 북 중앙의 묵직한 울림 */
+  playBass(vel = 1) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const det = 0.95 + Math.random() * 0.1; // 매 타격 미세한 음정 변화(자연스러움)
+
+    // 1) 울림 본체: 150Hz → 53Hz로 떨어지는 사인파
+    const o = this.ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(150 * det, t);
+    o.frequency.exponentialRampToValueAtTime(53 * det, t + 0.11);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.95 * vel, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
+    o.connect(g).connect(this.bus);
+    o.start(t); o.stop(t + 0.7);
+
+    // 2) 타격 어택: 저역 노이즈 "퍽"
+    const n = this._noiseSrc();
+    const nf = this.ctx.createBiquadFilter();
+    nf.type = "lowpass"; nf.frequency.value = 240;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.6 * vel, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    n.connect(nf).connect(ng).connect(this.bus);
+    n.start(t); n.stop(t + 0.12);
+
+    // 3) 통 울림 배음
+    const o2 = this.ctx.createOscillator();
+    o2.type = "triangle";
+    o2.frequency.setValueAtTime(210 * det, t);
+    o2.frequency.exponentialRampToValueAtTime(88 * det, t + 0.07);
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.22 * vel, t);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o2.connect(g2).connect(this.bus);
+    o2.start(t); o2.stop(t + 0.2);
+  }
+
+  /* 슬랩톤 "딱" — 테두리의 날카로운 타격 */
+  playSlap(vel = 1) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const det = 0.94 + Math.random() * 0.12;
+
+    // 1) 크랙: 밴드패스 노이즈
+    const n1 = this._noiseSrc();
+    const f1 = this.ctx.createBiquadFilter();
+    f1.type = "bandpass"; f1.frequency.value = 2400 * det; f1.Q.value = 1.1;
+    const g1 = this.ctx.createGain();
+    g1.gain.setValueAtTime(0.85 * vel, t);
+    g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.085);
+    n1.connect(f1).connect(g1).connect(this.bus);
+    n1.start(t); n1.stop(t + 0.12);
+
+    // 2) 고역 스냅(아주 짧게)
+    const n2 = this._noiseSrc();
+    const f2 = this.ctx.createBiquadFilter();
+    f2.type = "highpass"; f2.frequency.value = 5200;
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.35 * vel, t);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    n2.connect(f2).connect(g2).connect(this.bus);
+    n2.start(t); n2.stop(t + 0.07);
+
+    // 3) 나무 테두리 톤
+    const o = this.ctx.createOscillator();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(820 * det, t);
+    o.frequency.exponentialRampToValueAtTime(460 * det, t + 0.045);
+    const g3 = this.ctx.createGain();
+    g3.gain.setValueAtTime(0.38 * vel, t);
+    g3.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    o.connect(g3).connect(this.bus);
+    o.start(t); o.stop(t + 0.12);
+  }
+
+  /* 카운트다운 비프 — step 3·2·1, 0 = START */
+  playCount(step) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const hi = step === 0;
+    const o = this.ctx.createOscillator();
+    o.type = "triangle";
+    o.frequency.value = hi ? 1188 : 792;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(hi ? 0.5 : 0.35, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (hi ? 0.5 : 0.18));
+    o.connect(g).connect(this.bus);
+    o.start(t); o.stop(t + (hi ? 0.55 : 0.22));
+  }
+
+  /* 박자 가이드 틱 (4박마다 악센트) */
+  playTick(accent) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.value = accent ? 1320 : 990;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(accent ? 0.10 : 0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g).connect(this.bus);
+    o.start(t); o.stop(t + 0.07);
+  }
+
+  /* Perfect 판정 보너스 스파클 */
+  playSparkle() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [1980, 2640].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      o.type = "sine"; o.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(i ? 0.05 : 0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g).connect(this.bus);
+      o.start(t); o.stop(t + 0.11);
+    });
+  }
+
+  play(tone, vel) {
+    if (tone === "bass") this.playBass(vel);
+    else this.playSlap(vel);
+  }
+}
+
+/* ============================================================
+   ParticleSystem — 타격 이펙트(링/스파크/먼지/플로팅 텍스트/글로우)
+   ============================================================ */
+class ParticleSystem {
+  constructor() { this.items = []; }
+
+  _push(p) {
+    if (this.items.length >= CONFIG.particle.max) this.items.shift();
+    this.items.push(p);
+  }
+
+  /* 베이스톤: 퍼지는 저주파 링 + 따뜻한 글로우 + 먼지 */
+  emitBass(x, y, R) {
+    this._push({ type: "glow", x, y, r: R * 0.30, life: 0, max: 0.26, color: "255,205,140" });
+    for (let i = 0; i < 3; i++) {
+      this._push({
+        type: "ring", x, y,
+        r: R * (0.05 + i * 0.03), vr: R * (1.35 + i * 0.45),
+        life: 0, max: 0.5 + i * 0.1,
+        color: "255,236,205", lw: Math.max(2, R * (0.022 - i * 0.005))
+      });
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2, sp = R * (0.1 + Math.random() * 0.22);
+      this._push({
+        type: "dust", x, y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - R * 0.18,
+        size: 2 + Math.random() * 3, life: 0, max: 0.55 + Math.random() * 0.25,
+        color: "255,228,185"
+      });
+    }
+  }
+
+  /* 슬랩톤: 날카로운 스파크 + 타이트한 링 + 밝은 플래시 */
+  emitSlap(x, y, R) {
+    this._push({ type: "glow", x, y, r: R * 0.16, life: 0, max: 0.18, color: "255,245,225" });
+    this._push({
+      type: "ring", x, y, r: R * 0.03, vr: R * 1.05,
+      life: 0, max: 0.26, color: "255,255,255", lw: Math.max(2, R * 0.016)
+    });
+    for (let i = 0; i < 13; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = R * (0.85 + Math.random() * 1.1);
+      this._push({
+        type: "spark", x, y,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        len: R * (0.035 + Math.random() * 0.05),
+        life: 0, max: 0.2 + Math.random() * 0.12,
+        color: Math.random() < 0.5 ? "255,247,224" : "255,196,120"
+      });
+    }
+  }
+
+  /* "둥!" / "딱!" 플로팅 텍스트 */
+  emitText(x, y, str, color, size) {
+    this._push({ type: "text", x, y, vy: -size * 1.1, str, color, size, life: 0, max: 0.6 });
+  }
+
+  update(dt) {
+    const arr = this.items;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const p = arr[i];
+      p.life += dt;
+      if (p.life >= p.max) { arr.splice(i, 1); continue; }
+      if (p.type === "ring") p.r += p.vr * dt;
+      else if (p.type === "spark" || p.type === "dust") {
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= (1 - 3.2 * dt); p.vy *= (1 - 3.2 * dt);
+        if (p.type === "dust") p.vy -= 18 * dt; // 먼지는 살짝 떠오름
+      } else if (p.type === "text") {
+        p.y += p.vy * dt; p.vy *= (1 - 2.5 * dt);
+      }
+    }
+  }
+
+  draw(ctx, layer) {
+    /* layer: "under"(북면 위, 채 아래) / "over"(채 위) */
+    for (const p of this.items) {
+      const t = p.life / p.max;
+      const a = 1 - t;
+      if (layer === "under") {
+        if (p.type === "glow") {
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * (1 + t * 0.4));
+          g.addColorStop(0, `rgba(${p.color},${0.32 * a})`);
+          g.addColorStop(1, `rgba(${p.color},0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 + t * 0.4), 0, Math.PI * 2); ctx.fill();
+        } else if (p.type === "ring") {
+          ctx.strokeStyle = `rgba(${p.color},${0.55 * a})`;
+          ctx.lineWidth = p.lw * (1 - t * 0.5);
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
+        } else if (p.type === "dust") {
+          ctx.fillStyle = `rgba(${p.color},${0.4 * a})`;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (layer === "over") {
+        // 스파크만 채 위에 그림 (플로팅 텍스트는 _drawTexts 전용 패스에서 처리)
+        if (p.type === "spark") {
+          const vlen = Math.hypot(p.vx, p.vy) || 1;
+          const nx = p.vx / vlen, ny = p.vy / vlen;
+          ctx.strokeStyle = `rgba(${p.color},${0.85 * a})`;
+          ctx.lineWidth = 2;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - nx * p.len, p.y - ny * p.len);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+}
+
+/* ============================================================
+   Stick — 난타채 1개
+   - 휴지 자세: 채 끝이 북 중심 근처, 손잡이는 테두리 바깥(세모꼴)
+   - 타격: 손잡이(그립)를 축으로 입력 지점을 향해 빠르게 회전/이동
+   - 가까운 지점은 채의 중간(샤프트)이 닿는 것이 자연스러우므로
+     채 끝이 정확히 입력점을 지나도록 직선을 맞춘다.
+   ============================================================ */
+class Stick {
+  constructor(side) {
+    this.side = side;            // -1: 왼채, +1: 오른채
+    this.phase = "rest";         // rest | strike | hold | return
+    this.t0 = 0;
+    this.pose = { gx: 0, gy: 0, ang: 0 };     // 현재 자세(그립 위치 + 각도)
+    this.startPose = null;       // 보간 시작 자세
+    this.targetPose = null;      // 타격 목표 자세
+    this.rest = { gx: 0, gy: 0, ang: 0 };
+    this.len = 100; this.R = 100;
+  }
+
+  /* 화면 크기 변경 시 휴지 자세 재계산 */
+  setLayout(cx, cy, R) {
+    const C = CONFIG.stick;
+    this.R = R;
+    this.len = R * C.lengthRatio;
+    // 채 끝(세모꼴 꼭짓점): 중심에서 살짝 벌어진 위쪽
+    const tipX = cx + this.side * C.restTipGap * R;
+    const tipY = cy + C.restTipY * R;
+    // 기울기: 왼채는 ↗ 방향, 오른채는 ↖ 방향 (그립 → 채 끝 벡터 기준)
+    const a = (Math.PI / 180) * C.restAngleDeg;
+    const ang = this.side === -1 ? -a : -(Math.PI - a);
+    this.rest = {
+      gx: tipX - Math.cos(ang) * this.len,
+      gy: tipY - Math.sin(ang) * this.len,
+      ang
+    };
+    // 진행 중인 동작은 초기화
+    this.phase = "rest";
+    this.pose = { ...this.rest };
+  }
+
+  /* (px, py) 지점 타격 */
+  strike(px, py, now) {
+    const C = CONFIG.stick;
+    const g0 = this.rest;
+    const dx = px - g0.gx, dy = py - g0.gy;
+    const d = Math.hypot(dx, dy) || 1;
+
+    // 휴지 각도에서 너무 크게 벗어나지 않도록 회전 제한
+    let ang = Math.atan2(dy, dx);
+    let dAng = (ang - g0.ang) % (Math.PI * 2);
+    if (dAng > Math.PI) dAng -= Math.PI * 2;
+    if (dAng < -Math.PI) dAng += Math.PI * 2;
+    const maxSwing = (Math.PI / 180) * C.maxSwingDeg;
+    dAng = clamp(dAng, -maxSwing, maxSwing);
+    ang = g0.ang + dAng;
+
+    // 먼 지점은 그립을 입력점 방향으로 밀어 채 끝이 닿게 함
+    const dirX = Math.cos(ang), dirY = Math.sin(ang);
+    const slide = d > this.len ? Math.min(d - this.len, this.len * 0.9) : 0;
+
+    this.startPose = { ...this.pose };
+    this.targetPose = { gx: g0.gx + dirX * slide, gy: g0.gy + dirY * slide, ang };
+    this.phase = "strike";
+    this.t0 = now;
+  }
+
+  update(now) {
+    const C = CONFIG.stick;
+    if (this.phase === "strike") {
+      const t = (now - this.t0) / C.strikeMs;
+      if (t >= 1) {
+        this.pose = { ...this.targetPose };
+        this.phase = "hold"; this.t0 = now;
+      } else {
+        const e = easeOutCubic(t);
+        this.pose.gx = lerp(this.startPose.gx, this.targetPose.gx, e);
+        this.pose.gy = lerp(this.startPose.gy, this.targetPose.gy, e);
+        this.pose.ang = lerpAngle(this.startPose.ang, this.targetPose.ang, e);
+      }
+    } else if (this.phase === "hold") {
+      if (now - this.t0 >= C.holdMs) {
+        this.startPose = { ...this.pose };
+        this.phase = "return"; this.t0 = now;
+      }
+    } else if (this.phase === "return") {
+      const t = (now - this.t0) / C.returnMs;
+      if (t >= 1) {
+        this.pose = { ...this.rest };
+        this.phase = "rest";
+      } else {
+        const e = easeInOutQuad(t);
+        this.pose.gx = lerp(this.startPose.gx, this.rest.gx, e);
+        this.pose.gy = lerp(this.startPose.gy, this.rest.gy, e);
+        this.pose.ang = lerpAngle(this.startPose.ang, this.rest.ang, e);
+      }
+    }
+  }
+
+  /* 타격 진행 중 살짝 들리는 효과(그림자 거리용) */
+  get lift() {
+    const C = CONFIG.stick;
+    const now = performance.now();
+    if (this.phase === "strike") {
+      const t = clamp((now - this.t0) / C.strikeMs, 0, 1);
+      return Math.sin(t * Math.PI) * 0.55;
+    }
+    if (this.phase === "return") {
+      const t = clamp((now - this.t0) / C.returnMs, 0, 1);
+      return Math.sin(t * Math.PI) * 0.18;
+    }
+    return 0;
+  }
+
+  draw(ctx) {
+    const { gx, gy, ang } = this.pose;
+    const L = this.len;
+    const w0 = this.R * 0.052;   // 손잡이 굵기
+    const w1 = this.R * 0.034;   // 채 끝 굵기
+    const liftPx = this.lift * this.R * 0.12;
+
+    const shape = () => {
+      ctx.beginPath();
+      ctx.moveTo(0, -w0 / 2);
+      ctx.lineTo(L - w1 / 2, -w1 / 2);
+      ctx.arc(L - w1 / 2, 0, w1 / 2, -Math.PI / 2, Math.PI / 2);
+      ctx.lineTo(0, w0 / 2);
+      ctx.arc(0, 0, w0 / 2, Math.PI / 2, Math.PI * 1.5);
+      ctx.closePath();
+    };
+
+    // 1) 그림자 (들릴수록 멀어짐)
+    ctx.save();
+    ctx.translate(gx + 2 + liftPx * 0.7, gy + 3 + liftPx);
+    ctx.rotate(ang);
+    shape();
+    ctx.fillStyle = "rgba(40,24,10,0.18)";
+    ctx.fill();
+    ctx.restore();
+
+    // 2) 채 본체 (나무 질감 그라데이션)
+    ctx.save();
+    ctx.translate(gx, gy);
+    ctx.rotate(ang);
+    const grad = ctx.createLinearGradient(0, 0, L, 0);
+    grad.addColorStop(0, "#6b4c30");
+    grad.addColorStop(0.45, "#8a6a48");
+    grad.addColorStop(1, "#9c7c58");
+    shape();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    // 윗면 하이라이트
+    ctx.strokeStyle = "rgba(255,244,224,0.28)";
+    ctx.lineWidth = w1 * 0.32;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(w0 * 0.8, -w0 * 0.16);
+    ctx.lineTo(L - w1 * 1.4, -w1 * 0.18);
+    ctx.stroke();
+    // 손잡이 끝 마감
+    ctx.fillStyle = "rgba(60,38,20,0.55)";
+    ctx.beginPath();
+    ctx.arc(0, 0, w0 * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   리듬 게임 — 난이도/판정/점수 설정
+   ============================================================ */
+const DIFFICULTY_CONFIG = {
+  intro:        { label: "입문", badge: "🌱", color: "#4caf50", approachMs: 3100, perfect: 60, great: 115, good: 170, miss: 220, minGapMs: 500, minToneGapMs: 600 },
+  beginner:     { label: "초급", badge: "🥁", color: "#2196f3", approachMs: 2800, perfect: 55, great: 105, good: 160, miss: 210, minGapMs: 340, minToneGapMs: 350 },
+  intermediate: { label: "중급", badge: "🔥", color: "#ff9800", approachMs: 2450, perfect: 50, great: 95,  good: 145, miss: 190, minGapMs: 280, minToneGapMs: 280 },
+  advanced:     { label: "고급", badge: "⚡", color: "#e53935", approachMs: 2250, perfect: 48, great: 90,  good: 140, miss: 185, minGapMs: 235, minToneGapMs: 245 }
+};
+const NOTE_SPEED_MULT = { slow: 1.15, normal: 1.0, fast: 0.85 };
+const PRACTICE_MOD = { bpm: 0.9, approach: 1.2, window: 1.3 };   // 연습 모드 보정
+const SCORE_TABLE = { perfect: 1000, great: 700, good: 400, miss: 0 };
+const ACC_WEIGHT = { perfect: 1, great: 0.75, good: 0.45, miss: 0 };
+const GRADES = [{ g: "S", min: 95 }, { g: "A", min: 88 }, { g: "B", min: 78 }, { g: "C", min: 65 }, { g: "D", min: 0 }];
+const GRADE_ORDER = ["S", "A", "B", "C", "D"];
+const GRADE_COLOR = { S: "#e8a013", A: "#3f9d4e", B: "#4a7bd0", C: "#b07c2f", D: "#8a7050" };
+const GRADE_FEEDBACK = {
+  S: "완벽한 그루브! 난타 마스터에 가까워졌어요.",
+  A: "훌륭해요. 리듬이 아주 안정적입니다.",
+  B: "좋아요. 몇 박자만 더 정확히 맞춰보세요.",
+  C: "기본기가 잡혔어요. 둥(베이스)부터 차근차근!",
+  D: "괜찮아요. 연습 모드로 천천히 손에 익혀봐요."
+};
+const JUDGE_STYLE = {
+  perfect: { t: "PERFECT", c: "#e8a013" },
+  great:   { t: "GREAT",   c: "#3f9d4e" },
+  good:    { t: "GOOD",    c: "#4a7bd0" },
+  miss:    { t: "MISS",    c: "#c0392b" }
+};
+
+/* ============================================================
+   리듬 라이브러리 데이터 (B = 둥/베이스, S = 딱/슬랩, - = 쉼표)
+   - 전통 장단의 엄밀한 재현이 아닌 "스타일" 학습 패턴
+   ============================================================ */
+const RHYTHM_LIBRARY_DATA = [
+  // ----- 입문 -----
+  {
+    id: "intro_basic_dung", titleKo: "기본 둥", title: "Basic Dung",
+    difficulty: "intro", star: 1, bpm: 66, patternUnit: "quarter",
+    bars: [["B","-","B","-"], ["B","-","B","-"]], repeat: 6,
+    description: "베이스톤(둥)만으로 박자를 익히는 첫 리듬입니다.",
+    learningGoal: "북 중앙을 정확한 타이밍에 치기",
+    tips: ["판정선에 노트가 닿는 순간 중앙을 치세요.", "어깨에 힘을 빼고 일정한 간격을 유지하세요."]
+  },
+  {
+    id: "intro_dung_ddak_walk", titleKo: "둥딱 걷기", title: "Dung-Ddak Walk",
+    difficulty: "intro", star: 1, bpm: 70, patternUnit: "quarter",
+    bars: [["B","S","B","S"], ["B","S","B","-"]], repeat: 6,
+    description: "둥과 딱을 번갈아 치며 중앙·테두리 위치를 익힙니다.",
+    learningGoal: "베이스톤과 슬랩톤의 위치·소리 구분하기",
+    tips: ["둥은 중앙, 딱은 테두리! 손 위치를 미리 준비하세요.", "콤보보다 정확도를 먼저 챙기세요."]
+  },
+  {
+    id: "intro_ddak_greeting", titleKo: "딱 인사", title: "Ddak Greeting",
+    difficulty: "intro", star: 2, bpm: 74, patternUnit: "eighth",
+    bars: [["B","-","-","-","S","-","S","-"], ["B","-","-","-","S","-","-","-"]], repeat: 6,
+    description: "느린 박자에 딱(슬랩)을 포인트처럼 넣어봅니다.",
+    learningGoal: "슬랩톤을 서두르지 않고 악센트로 넣기",
+    tips: ["딱은 가볍고 경쾌하게!", "연속 딱은 양손을 번갈아 쓰면 편해요."]
+  },
+  // ----- 초급 -----
+  {
+    id: "beg_jajinmori_style", titleKo: "자진모리 스타일", title: "Jajinmori Style",
+    difficulty: "beginner", star: 2, bpm: 80, patternUnit: "eighth",
+    bars: [["B","-","S","-","B","-","S","-"], ["B","-","S","-","B","S","-","-"]], repeat: 8,
+    description: "흥겨운 반복 패턴으로 둥·딱의 안정감을 키웁니다.",
+    learningGoal: "반복 그루브를 일정한 세기로 유지하기",
+    tips: ["‘둥-딱-둥-딱’ 입으로 읊으며 치면 쉬워요.", "마지막 둥딱 연결에서 박자가 빨라지지 않게 주의!"]
+  },
+  {
+    id: "beg_dung_double", titleKo: "둥둥 다지기", title: "Double Dung",
+    difficulty: "beginner", star: 3, bpm: 84, patternUnit: "eighth",
+    bars: [["B","B","-","-","B","B","-","-"], ["B","B","-","-","S","-","S","-"]], repeat: 8,
+    description: "둥둥! 연속 베이스로 손목 스냅을 단련합니다.",
+    learningGoal: "빠른 둥 2연타를 고르게 치기",
+    tips: ["연타는 팔이 아니라 손목으로!", "두 번째 둥이 약해지지 않게 신경 쓰세요."]
+  },
+  {
+    id: "beg_ddak_accent", titleKo: "딱 악센트", title: "Ddak Accent",
+    difficulty: "beginner", star: 3, bpm: 86, patternUnit: "eighth",
+    bars: [["B","-","S","-","B","-","-","S"], ["B","-","S","-","B","-","S","-"]], repeat: 8,
+    description: "엇박에 들어오는 딱이 리듬에 긴장감을 더합니다.",
+    learningGoal: "엇박 슬랩을 놓치지 않고 받아치기",
+    tips: ["뒤로 밀리는 딱을 미리 예상하고 손을 준비하세요.", "둥은 묵직하게, 딱은 가볍게 — 강약 대비!"]
+  },
+  // ----- 중급 -----
+  {
+    id: "int_gutgeori_style", titleKo: "굿거리 스타일", title: "Gutgeori Style",
+    difficulty: "intermediate", star: 3, bpm: 92, patternUnit: "eighth",
+    bars: [["B","-","S","S","B","-","S","-"], ["B","S","-","S","B","-","S","-"]], repeat: 9,
+    description: "출렁이는 굿거리 느낌의 중급 패턴입니다.",
+    learningGoal: "딱딱 연속과 단일 딱을 구분해 치기",
+    tips: ["딱 2연타는 양손을 번갈아!", "리듬에 몸을 흔들며 타면 훨씬 쉬워져요."]
+  },
+  {
+    id: "int_offbeat_groove", titleKo: "엇박 그루브", title: "Offbeat Groove",
+    difficulty: "intermediate", star: 4, bpm: 96, patternUnit: "eighth",
+    bars: [["B","-","-","S","-","S","B","-"], ["B","-","S","-","S","-","B","S"]], repeat: 9,
+    description: "빈 박과 엇박이 만드는 묘한 그루브에 도전하세요.",
+    learningGoal: "쉼표 뒤의 타이밍 감각 기르기",
+    tips: ["쉼표도 리듬! 속으로 박자를 계속 세세요.", "마지막 딱이 다음 둥과 이어지는 느낌을 살려보세요."]
+  },
+  {
+    id: "int_double_ddak", titleKo: "더블 딱", title: "Double Ddak",
+    difficulty: "intermediate", star: 4, bpm: 100, patternUnit: "eighth",
+    bars: [["B","-","S","S","-","-","S","-"], ["B","-","S","S","-","S","-","-"]], repeat: 9,
+    description: "테두리를 빠르게 두 번! 슬랩 연타 집중 훈련입니다.",
+    learningGoal: "딱 2연타의 균일한 간격 만들기",
+    tips: ["연타는 좌우 손을 번갈아 치면 안정적이에요.", "팔꿈치는 고정하고 손목 반동을 이용하세요."]
+  },
+  // ----- 고급 -----
+  {
+    id: "adv_byeoldal_style", titleKo: "별달거리 스타일", title: "Byeoldal Style",
+    difficulty: "advanced", star: 4, bpm: 106, patternUnit: "eighth",
+    bars: [["B","S","S","B","-","S","B","-"], ["B","S","-","B","S","S","B","-"]], repeat: 10,
+    description: "둥과 딱이 촘촘히 얽히는 고급 패턴입니다.",
+    learningGoal: "빠른 전환 속에서 정확도 유지하기",
+    tips: ["손 위치 이동을 최소화하면 빨라져요.", "틀려도 멈추지 말고 다음 박자에 합류!"]
+  },
+  {
+    id: "adv_hwimori_style", titleKo: "휘모리 스타일", title: "Hwimori Style",
+    difficulty: "advanced", star: 5, bpm: 112, patternUnit: "eighth",
+    bars: [["B","S","B","S","B","S","B","-"], ["B","S","B","S","B","-","S","-"]], repeat: 10,
+    description: "몰아치는 휘모리! 둥딱 교대의 한계 속도에 도전합니다.",
+    learningGoal: "빠른 템포에서 양손 교대 유지하기",
+    tips: ["왼손 둥·오른손 딱처럼 역할을 정해두면 좋아요.", "호흡을 멈추지 말고 어깨의 힘을 빼세요."]
+  },
+  {
+    id: "adv_nanta_finale", titleKo: "난타 피날레", title: "Nanta Finale",
+    difficulty: "advanced", star: 5, bpm: 118, patternUnit: "eighth",
+    bars: [["B","S","S","B","S","B","S","-"], ["B","B","S","-","B","S","S","-"]], repeat: 10,
+    description: "모든 기술을 쏟아내는 최종 도전 리듬입니다.",
+    learningGoal: "연타·엇박·전환을 모두 안정적으로 연주하기",
+    tips: ["처음 한 마디 패턴을 외우면 절반은 성공!", "Miss가 나도 콤보는 다시 쌓으면 됩니다."]
+  }
+];
+
+/* ---------- 패턴 → 노트 변환 ---------- */
+function beatStepOf(unit) {
+  return unit === "quarter" ? 1 : unit === "sixteenth" ? 0.25 : 0.5;
+}
+
+/* 리듬 데이터의 bars를 시간순 노트 배열로 변환 + 간격 자동 보정 */
+function generateNotes(rhythm, bpm = rhythm.bpm) {
+  const step = beatStepOf(rhythm.patternUnit);
+  const beatMs = 60000 / bpm;
+  const notes = [];
+  let idx = 0, slapSide = -1;
+  let beatCursor = 4; // 카운트다운 직후 첫 노트가 너무 빨리 나오지 않게 4박 여유
+
+  for (let r = 0; r < rhythm.repeat; r++) {
+    for (const bar of rhythm.bars) {
+      for (let i = 0; i < bar.length; i++) {
+        const tk = bar[i];
+        if (tk === "B" || tk === "S") {
+          const tone = tk === "B" ? "bass" : "slap";
+          let side = 0;
+          if (tone === "slap") { slapSide = -slapSide; side = slapSide; } // 딱은 좌/우 레인 번갈아
+          const beat = beatCursor + i * step;
+          notes.push({ id: idx++, tone, side, beat, hitTimeMs: beat * beatMs, status: "pending" });
+        }
+      }
+      beatCursor += bar.length * step;
+    }
+  }
+
+  // 간격 검증 + 자동 보정 — 노트 겹침 절대 금지
+  const diff = DIFFICULTY_CONFIG[rhythm.difficulty];
+  notes.sort((a, b) => a.hitTimeMs - b.hitTimeMs);
+  let lastAny = -Infinity;
+  const lastTone = { bass: -Infinity, slap: -Infinity };
+  for (const n of notes) {
+    let shift = 0;
+    const gapAny = n.hitTimeMs - lastAny;
+    const gapTone = n.hitTimeMs - lastTone[n.tone];
+    if (gapAny < diff.minGapMs) shift = Math.max(shift, diff.minGapMs - gapAny);
+    if (gapTone < diff.minToneGapMs) shift = Math.max(shift, diff.minToneGapMs - gapTone);
+    if (shift > 0) { n.hitTimeMs += shift; n.autoShifted = true; }
+    lastAny = n.hitTimeMs;
+    lastTone[n.tone] = n.hitTimeMs;
+  }
+  return notes;
+}
+
+/* ============================================================
+   Settings — 설정값 (localStorage 영속)
+   ============================================================ */
+class Settings {
+  constructor() {
+    this.key = "nanta.settings.v1";
+    const def = { volume: 0.9, noteSpeed: "normal", offsetMs: 0, tick: true, vibrate: true };
+    let d = def;
+    try { d = Object.assign({}, def, JSON.parse(localStorage.getItem(this.key) || "{}")); } catch { /* 무시 */ }
+    this.data = d;
+  }
+  save() {
+    try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch { /* 무시 */ }
+  }
+}
+
+/* ============================================================
+   ProgressManager — 리듬별 최고 기록 (localStorage 영속)
+   ============================================================ */
+function betterGrade(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return GRADE_ORDER.indexOf(a) <= GRADE_ORDER.indexOf(b) ? a : b;
+}
+
+class ProgressManager {
+  constructor() {
+    this.key = "nanta.progress.v1";
+    let d = { lastSelectedRhythmId: null, records: {} };
+    try {
+      const raw = localStorage.getItem(this.key);
+      if (raw) d = Object.assign(d, JSON.parse(raw));
+    } catch { /* 무시 */ }
+    this.data = d;
+  }
+  _save() {
+    try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch { /* 무시 */ }
+  }
+  getRecord(id) { return this.data.records[id] || null; }
+  get lastSelected() { return this.data.lastSelectedRhythmId; }
+  setLastSelected(id) { this.data.lastSelectedRhythmId = id; this._save(); }
+
+  /* 결과 반영 — 갱신 여부 플래그 반환 */
+  update(id, result) {
+    const prev = this.getRecord(id);
+    const flags = {
+      newScore: !prev || result.score > prev.bestScore,
+      newAcc:   !prev || result.accuracy > prev.bestAccuracy,
+      newCombo: !prev || result.maxCombo > prev.bestCombo
+    };
+    this.data.records[id] = {
+      plays: (prev ? prev.plays : 0) + 1,
+      bestScore: Math.max(prev ? prev.bestScore : 0, result.score),
+      bestCombo: Math.max(prev ? prev.bestCombo : 0, result.maxCombo),
+      bestAccuracy: Math.max(prev ? prev.bestAccuracy : 0, result.accuracy),
+      bestGrade: betterGrade(prev && prev.bestGrade, result.grade),
+      lastPlayedAt: new Date().toISOString(),
+      toneStats: result.toneStats
+    };
+    this._save();
+    return flags;
+  }
+}
+
+/* ============================================================
+   RhythmLibrary — 리듬 조회/통계/추천
+   ============================================================ */
+class RhythmLibrary {
+  constructor() {
+    this.list = RHYTHM_LIBRARY_DATA;
+    this._cache = {};
+  }
+  byId(id) { return this.list.find(r => r.id === id) || null; }
+  byDiff(d) { return d === "all" ? this.list : this.list.filter(r => r.difficulty === d); }
+
+  /* 노트 수/플레이 시간 (생성 결과 캐시) */
+  stats(rhythm) {
+    if (!this._cache[rhythm.id]) {
+      const notes = generateNotes(rhythm);
+      const last = notes.length ? notes[notes.length - 1].hitTimeMs : 0;
+      this._cache[rhythm.id] = { count: notes.length, seconds: Math.round((last + 2200) / 1000) };
+    }
+    return this._cache[rhythm.id];
+  }
+
+  /* 결과 기반 다음 추천 리듬 */
+  recommendNext(curId, result, progress) {
+    const cur = this.byId(curId);
+    if (!cur || !result || result.accuracy < 65) return curId; // 재도전 추천
+    const order = ["intro", "beginner", "intermediate", "advanced"];
+    if (result.accuracy < 82) {
+      const same = this.list.filter(r => r.difficulty === cur.difficulty && r.id !== curId);
+      const un = same.find(r => !progress.getRecord(r.id));
+      return (un || same[0] || cur).id;
+    }
+    const ni = order.indexOf(cur.difficulty) + 1;
+    if (ni < order.length) {
+      const next = this.list.filter(r => r.difficulty === order[ni]);
+      const un = next.find(r => !progress.getRecord(r.id));
+      if (next.length) return (un || next[0]).id;
+    }
+    const anyUn = this.list.find(r => !progress.getRecord(r.id));
+    return (anyUn || cur).id;
+  }
+}
+
+/* ============================================================
+   PreviewPlayer — 선택 화면 미리듣기 (앞 2마디)
+   ============================================================ */
+class PreviewPlayer {
+  constructor(app, ui) {
+    this.app = app;
+    this.ui = ui;
+    this.timers = [];
+    this.playing = false;
+    this._raf = 0;
+    this._t0 = 0;
+    this._dur = 0;
+  }
+
+  toggle(rhythm) { this.playing ? this.stop() : this.play(rhythm); }
+
+  play(rhythm) {
+    this.stop();
+    this.app.audio.ensure();
+    const step = beatStepOf(rhythm.patternUnit);
+    const beatMs = 60000 / rhythm.bpm;
+    const bars = rhythm.bars.slice(0, 2);
+    let beat = 0;
+    const events = [];
+    for (const bar of bars) {
+      for (let i = 0; i < bar.length; i++) {
+        const tk = bar[i];
+        if (tk === "B" || tk === "S") events.push({ t: (beat + i * step) * beatMs, tone: tk === "B" ? "bass" : "slap" });
+      }
+      beat += bar.length * step;
+    }
+    this._dur = beat * beatMs + 250;
+    this.playing = true;
+    this._t0 = performance.now();
+    for (const ev of events) {
+      this.timers.push(setTimeout(() => { if (this.playing) this.app.audio.play(ev.tone, 0.7); }, ev.t));
+    }
+    this.timers.push(setTimeout(() => this.stop(), this._dur));
+    this.ui.setPreviewLabel(true);
+    // 재생 커서 애니메이션
+    const tick = () => {
+      if (!this.playing) return;
+      const p = Math.min(1, (performance.now() - this._t0) / this._dur);
+      this.ui.drawPattern(p);
+      this._raf = requestAnimationFrame(tick);
+    };
+    this._raf = requestAnimationFrame(tick);
+  }
+
+  stop() {
+    this.timers.forEach(t => clearTimeout(t));
+    this.timers = [];
+    if (this._raf) { cancelAnimationFrame(this._raf); this._raf = 0; }
+    const was = this.playing;
+    this.playing = false;
+    if (was) this.ui.drawPattern(0);
+    this.ui.setPreviewLabel(false);
+  }
+}
+
+/* ============================================================
+   RhythmSelectUI — 난이도별 리듬 선택 화면
+   ============================================================ */
+class RhythmSelectUI {
+  constructor(app) {
+    this.app = app;
+    this.el = document.getElementById("rhythmSelect");
+    this.cardsEl = document.getElementById("rsCards");
+    this.detailEl = document.getElementById("rsDetail");
+    this.filter = "all";
+    this.selectedId = null;
+    this.preview = new PreviewPlayer(app, this);
+
+    // 난이도 탭
+    document.getElementById("rsTabs").addEventListener("click", e => {
+      const b = e.target.closest("button[data-diff]");
+      if (!b) return;
+      this.filter = b.dataset.diff;
+      document.querySelectorAll("#rsTabs button").forEach(x => x.classList.toggle("active", x === b));
+      this.renderCards();
+    });
+    // 카드 선택 (이벤트 위임)
+    this.cardsEl.addEventListener("click", e => {
+      const card = e.target.closest(".r-card");
+      if (card) this.select(card.dataset.id);
+    });
+    // 뒤로 → 시작 화면
+    document.getElementById("rsBackBtn").addEventListener("click", () => {
+      this.close();
+      document.getElementById("introOverlay").classList.remove("hidden");
+      this.app.setMode("free");
+    });
+  }
+
+  open() {
+    const app = this.app;
+    this.el.classList.remove("hidden");
+    const last = app.progress.lastSelected;
+    this.selectedId = (last && app.library.byId(last)) ? last : app.library.list[0].id;
+    // 선택 리듬이 현재 필터 밖이면 전체 탭으로
+    if (this.filter !== "all" && app.library.byId(this.selectedId).difficulty !== this.filter) {
+      this.filter = "all";
+      document.querySelectorAll("#rsTabs button").forEach(x => x.classList.toggle("active", x.dataset.diff === "all"));
+    }
+    this.renderCards();
+    this.renderDetail();
+  }
+
+  close() {
+    this.preview.stop();
+    this.el.classList.add("hidden");
+  }
+
+  select(id) {
+    if (this.selectedId !== id) this.preview.stop();
+    this.selectedId = id;
+    this.app.progress.setLastSelected(id);
+    this.renderCards();
+    this.renderDetail();
+  }
+
+  /* 아직 기록이 없는 첫 리듬 = 추천 */
+  _recommendedId() {
+    const un = this.app.library.list.find(r => !this.app.progress.getRecord(r.id));
+    return un ? un.id : null;
+  }
+
+  renderCards() {
+    const app = this.app;
+    const list = app.library.byDiff(this.filter);
+    const recoId = this._recommendedId();
+    this.cardsEl.innerHTML = list.map(r => {
+      const d = DIFFICULTY_CONFIG[r.difficulty];
+      const st = app.library.stats(r);
+      const rec = app.progress.getRecord(r.id);
+      const recText = rec
+        ? `최고 ${rec.bestGrade} ${Math.round(rec.bestAccuracy)}% · ${rec.bestScore.toLocaleString()}점`
+        : "기록 없음";
+      return `
+      <button class="r-card ${r.id === this.selectedId ? "selected" : ""}" data-id="${r.id}">
+        ${r.id === recoId ? `<span class="reco-badge">추천</span>` : ""}
+        <div class="r-top">
+          <span class="diff-badge" style="background:${d.color}">${d.badge} ${d.label}</span>
+          <span class="stars">${"★".repeat(r.star)}${"☆".repeat(5 - r.star)}</span>
+        </div>
+        <h3>${r.titleKo} ${rec ? `<span class="done-check">✓</span>` : ""}</h3>
+        <div class="en">${r.title}</div>
+        <p class="desc">${r.description}</p>
+        <div class="r-meta"><span>BPM ${r.bpm}</span><span>${st.seconds}초</span><span>${st.count}노트</span></div>
+        <div class="r-rec">${recText}</div>
+      </button>`;
+    }).join("");
+  }
+
+  renderDetail() {
+    const app = this.app;
+    const r = app.library.byId(this.selectedId);
+    if (!r) { this.detailEl.innerHTML = ""; return; }
+    const d = DIFFICULTY_CONFIG[r.difficulty];
+    const st = app.library.stats(r);
+    const rec = app.progress.getRecord(r.id);
+    this.detailEl.innerHTML = `
+      <span class="diff-badge" style="background:${d.color}">${d.badge} ${d.label}</span>
+      <h3>${r.titleKo}</h3>
+      <div class="en">${r.title}</div>
+      <div class="d-grid">
+        <div><strong>${r.bpm}</strong><span>BPM</span></div>
+        <div><strong>${st.seconds}</strong><span>초</span></div>
+        <div><strong>${st.count}</strong><span>노트</span></div>
+        <div><strong>${"★".repeat(r.star)}</strong><span>난이도</span></div>
+      </div>
+      <p class="desc">${r.description}</p>
+      <h4>🎯 학습 목표</h4>
+      <p class="desc">${r.learningGoal}</p>
+      <h4>💡 연습 팁</h4>
+      <ul>${r.tips.map(t => `<li>${t}</li>`).join("")}</ul>
+      <h4>🎼 패턴 미리보기 (2마디)</h4>
+      <canvas id="rsPreviewCanvas" width="320" height="116"></canvas>
+      <h4>🏆 최고 기록</h4>
+      <div class="record-line">${rec
+        ? `${rec.bestGrade} 등급 · 정확도 ${rec.bestAccuracy.toFixed(1)}% · ${rec.bestScore.toLocaleString()}점 · 콤보 ${rec.bestCombo} · ${rec.plays}회`
+        : "아직 기록이 없어요. 첫 도전!"}</div>
+      <div class="rs-actions">
+        <button id="rsPreviewBtn" class="btn-secondary">▶ 미리듣기</button>
+        <div class="btn-row two" style="margin-top:0">
+          <button id="rsPracticeBtn" class="btn-secondary">연습하기</button>
+          <button id="rsStartBtn" class="btn-primary">이 리듬으로 시작</button>
+        </div>
+      </div>`;
+    document.getElementById("rsPreviewBtn").addEventListener("click", () => this.preview.toggle(r));
+    document.getElementById("rsPracticeBtn").addEventListener("click", () => this.app.game.start(r.id, "practice"));
+    document.getElementById("rsStartBtn").addEventListener("click", () => this.app.game.start(r.id, "normal"));
+    this.drawPattern(0);
+  }
+
+  setPreviewLabel(playing) {
+    const b = document.getElementById("rsPreviewBtn");
+    if (b) b.textContent = playing ? "⏹ 정지" : "▶ 미리듣기";
+  }
+
+  /* 미니 패턴 미리보기 캔버스 (둥/딱 2행 + 재생 커서) */
+  drawPattern(progress = 0) {
+    const cv = document.getElementById("rsPreviewCanvas");
+    const r = this.app.library.byId(this.selectedId);
+    if (!cv || !r) return;
+    const ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const padL = 46, padR = 14;
+    const rows = { slap: H * 0.30, bass: H * 0.72 };
+    const step = beatStepOf(r.patternUnit);
+    const bars = r.bars.slice(0, 2);
+    const maxBeat = bars.reduce((s, b) => s + b.length * step, 0);
+    ctx.font = "900 13px Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    ctx.textBaseline = "middle";
+    // 행 라인 + 라벨
+    for (const [tone, y] of Object.entries(rows)) {
+      ctx.strokeStyle = "rgba(42,28,16,0.12)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.fillStyle = tone === "bass" ? "#b35a17" : "#c0392b";
+      ctx.fillText(tone === "bass" ? "둥" : "딱", 12, y);
+    }
+    // 마디 구분선
+    let acc = 0;
+    for (const b of bars) {
+      const x = padL + (acc / maxBeat) * (W - padL - padR);
+      ctx.strokeStyle = "rgba(42,28,16,0.10)";
+      ctx.beginPath(); ctx.moveTo(x, 12); ctx.lineTo(x, H - 12); ctx.stroke();
+      acc += b.length * step;
+    }
+    // 노트 점
+    let beat = 0;
+    for (const bar of bars) {
+      for (let i = 0; i < bar.length; i++) {
+        const tk = bar[i];
+        if (tk === "B" || tk === "S") {
+          const x = padL + ((beat + i * step) / maxBeat) * (W - padL - padR);
+          if (tk === "B") {
+            ctx.fillStyle = "#b35a17";
+            ctx.beginPath(); ctx.arc(x, rows.bass, 7, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.strokeStyle = "#c0392b"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(x, rows.slap, 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.lineWidth = 1;
+          }
+        }
+      }
+      beat += bar.length * step;
+    }
+    // 재생 커서
+    if (progress > 0) {
+      const x = padL + progress * (W - padL - padR);
+      ctx.strokeStyle = "rgba(42,28,16,0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, H - 8); ctx.stroke();
+    }
+  }
+}
+
+/* ============================================================
+   RhythmGame — 노트 낙하 리듬 게임 본체
+   - 상태: idle | countdown | playing | paused | result
+   - 시간은 performance.now() 기반 gameTime 하나로 통일
+     (카운트다운 = gameTime −3000~0ms 구간, 일시정지 시간은 보정)
+   ============================================================ */
+class RhythmGame {
+  constructor(app) {
+    this.app = app;
+    this.state = "idle";
+    this.rhythm = null;
+    this.mode = "normal";       // normal | practice
+    this.notes = [];
+    this.headIdx = 0;           // 자동 Miss 스캔 포인터
+    this.win = null;            // 판정창 {perfect, great, good, miss}
+    this.approach = 2800;       // 노트 낙하 시간
+    this.beatMs = 600;
+    this.durationMs = 0;
+    this.sc = null;             // 점수판
+    this._before = "playing";
+    this._lastBeat = -1;
+    this._countStep = 4;
+    this._startFlashT = -1;
+    this._comboPopT = -9999;
+    this._endT = -1;
+    this._pausedAt = 0;
+    this._pausedTotal = 0;
+    this._t0 = 0;
+    this._lastProgT = 0;
+
+    // 일시정지 모달 버튼
+    document.getElementById("resumeBtn").addEventListener("click", () => this.resume());
+    document.getElementById("restartBtn").addEventListener("click", () => { if (this.rhythm) this.start(this.rhythm.id, this.mode); });
+    document.getElementById("quitBtn").addEventListener("click", () => this.quitToSelect());
+  }
+
+  /* ---------- 게임 시작 ---------- */
+  start(rhythmId, mode = "normal") {
+    const app = this.app;
+    const rhythm = app.library.byId(rhythmId);
+    if (!rhythm) return;
+    app.rsUI.close();
+    app.progress.setLastSelected(rhythmId);
+
+    this.rhythm = rhythm;
+    this.mode = mode;
+    const diff = DIFFICULTY_CONFIG[rhythm.difficulty];
+    const pr = mode === "practice";
+    const bpm = rhythm.bpm * (pr ? PRACTICE_MOD.bpm : 1);
+    this.beatMs = 60000 / bpm;
+    this.approach = diff.approachMs * NOTE_SPEED_MULT[app.settings.data.noteSpeed] * (pr ? PRACTICE_MOD.approach : 1);
+    const wm = pr ? PRACTICE_MOD.window : 1;
+    this.win = { perfect: diff.perfect * wm, great: diff.great * wm, good: diff.good * wm, miss: diff.miss * wm };
+
+    this.notes = generateNotes(rhythm, bpm);
+    const last = this.notes.length ? this.notes[this.notes.length - 1].hitTimeMs : 0;
+    this.durationMs = last + 2200;
+    this.headIdx = 0;
+    this.sc = {
+      score: 0, combo: 0, maxCombo: 0,
+      counts: { perfect: 0, great: 0, good: 0, miss: 0 },
+      tone: { bass: { hit: 0, total: 0 }, slap: { hit: 0, total: 0 } },
+      weighted: 0, judged: 0, total: this.notes.length
+    };
+    this.notes.forEach(n => this.sc.tone[n.tone].total++);
+    this._lastBeat = -1;
+    this._countStep = 4;
+    this._startFlashT = -1;
+    this._endT = -1;
+    this._pausedTotal = 0;
+    this._t0 = performance.now();
+    this.state = "countdown";
+
+    document.getElementById("resultModal").classList.add("hidden");
+    document.getElementById("pauseModal").classList.add("hidden");
+    app.setMode("game");
+    if (pr) {
+      document.getElementById("bottomHint").innerHTML =
+        `🌱 연습 모드 · 판정이 더 너그럽고 기록은 저장되지 않아요`;
+    }
+    app.audio.ensure();
+    this._updateHud();
+  }
+
+  gameTime(now = performance.now()) {
+    return now - this._t0 - 3000 - this._pausedTotal;
+  }
+
+  /* ---------- 일시정지 ---------- */
+  togglePause() {
+    if (this.state === "playing" || this.state === "countdown") {
+      this._before = this.state;
+      this.state = "paused";
+      this._pausedAt = performance.now();
+      document.getElementById("pauseModal").classList.remove("hidden");
+    } else if (this.state === "paused") {
+      this.resume();
+    }
+  }
+  resume() {
+    if (this.state !== "paused") return;
+    this._pausedTotal += performance.now() - this._pausedAt;
+    this.state = this._before || "playing";
+    document.getElementById("pauseModal").classList.add("hidden");
+  }
+  quitToSelect() {
+    this.state = "idle";
+    document.getElementById("pauseModal").classList.add("hidden");
+    document.getElementById("resultModal").classList.add("hidden");
+    this.app.rsUI.open();
+  }
+
+  /* ---------- 프레임 갱신 (메인 루프에서 호출) ---------- */
+  update(now) {
+    if (this.state === "idle" || this.state === "paused" || this.state === "result") return;
+    const app = this.app;
+    const gt = this.gameTime(now);
+
+    if (this.state === "countdown") {
+      const step = Math.max(0, Math.ceil(-gt / 1000)); // 3 → 2 → 1 → 0(START)
+      if (step !== this._countStep) {
+        this._countStep = step;
+        if (step > 0) {
+          app.audio.playCount(step);
+          app.particles.emitSlap(app.cx, app.h * 0.40, app.R * 0.8);
+        } else {
+          app.audio.playCount(0);
+          app.particles.emitBass(app.cx, app.h * 0.40, app.R);
+          app.particles.emitSlap(app.cx, app.h * 0.40, app.R);
+          this._startFlashT = now;
+          this.state = "playing";
+        }
+      }
+      return;
+    }
+
+    // ----- playing -----
+    // 박자 가이드 틱
+    if (app.settings.data.tick && gt >= 0) {
+      const bi = Math.floor(gt / this.beatMs);
+      if (bi > this._lastBeat) { this._lastBeat = bi; app.audio.playTick(bi % 4 === 0); }
+    }
+    // 자동 Miss (판정창을 지나친 노트)
+    const offset = app.settings.data.offsetMs;
+    while (this.headIdx < this.notes.length) {
+      const n = this.notes[this.headIdx];
+      if (n.status !== "pending") { this.headIdx++; continue; }
+      if (gt - (n.hitTimeMs + offset) > this.win.miss) {
+        this._miss(n, gt);
+        this.headIdx++;
+      } else break;
+    }
+    // 진행 바 (200ms 간격으로만 DOM 갱신)
+    if (now - this._lastProgT > 200) {
+      this._lastProgT = now;
+      const pct = clamp(gt / this.durationMs, 0, 1) * 100;
+      document.getElementById("progressFill").style.width = pct + "%";
+    }
+    // 종료 판단
+    if (this._endT < 0 && this.sc.judged >= this.sc.total) this._endT = now + 900;
+    if (this._endT < 0 && gt > this.durationMs) this._endT = now + 400;
+    if (this._endT > 0 && now >= this._endT) this._finish();
+  }
+
+  /* ---------- 입력 판정 (NantaApp.handleHit에서 호출) ---------- */
+  handleInput(tone) {
+    if (this.state !== "playing") return;
+    const gt = this.gameTime();
+    if (gt < 0) return; // START 전에는 판정하지 않음
+    const offset = this.app.settings.data.offsetMs;
+
+    // 판정창 안의 가장 가까운 같은 톤 노트 찾기 (시간순 정렬 활용)
+    let best = null, bestAbs = Infinity;
+    for (const n of this.notes) {
+      if (n.status !== "pending" || n.tone !== tone) continue;
+      const delta = gt - n.hitTimeMs - offset;
+      if (delta < -this.win.miss) break; // 이후 노트는 모두 미래
+      const abs = Math.abs(delta);
+      if (abs <= this.win.miss && abs < bestAbs) { best = n; bestAbs = abs; }
+    }
+    if (!best) return; // 빈 타격 — 소리만 나고 감점 없음
+
+    let kind;
+    if (bestAbs <= this.win.perfect) kind = "perfect";
+    else if (bestAbs <= this.win.great) kind = "great";
+    else if (bestAbs <= this.win.good) kind = "good";
+    else { this._miss(best, gt); return; } // good~miss 사이 = 너무 이르거나 늦음
+
+    best.status = "hit";
+    const sc = this.sc;
+    sc.judged++;
+    sc.counts[kind]++;
+    sc.tone[tone].hit++;
+    sc.weighted += ACC_WEIGHT[kind];
+    sc.combo++;
+    sc.maxCombo = Math.max(sc.maxCombo, sc.combo);
+    this._comboPopT = performance.now();
+    // 콤보 보너스
+    let bonus = 1;
+    if (sc.combo >= 50) bonus = 1.15;
+    else if (sc.combo >= 30) bonus = 1.10;
+    else if (sc.combo >= 10) bonus = 1.05;
+    sc.score += Math.round(SCORE_TABLE[kind] * bonus);
+
+    // 노트 폭발 이펙트 + 판정 텍스트
+    const app = this.app;
+    const x = this._laneX(best);
+    if (kind === "perfect") app.audio.playSparkle();
+    if (tone === "bass") app.particles.emitBass(x, app.judgeY, app.R * 0.8);
+    else app.particles.emitSlap(x, app.judgeY, app.R * 0.8);
+    this._judgeText(best, kind);
+    this._updateHud();
+  }
+
+  _miss(note, gt) {
+    note.status = "miss";
+    note.missAt = gt;
+    this.sc.counts.miss++;
+    this.sc.judged++;
+    this.sc.combo = 0;
+    this._judgeText(note, "miss");
+    this._updateHud();
+  }
+
+  _laneX(note) {
+    const L = this.app.laneX;
+    return note.tone === "bass" ? L.bass : (note.side < 0 ? L.slapL : L.slapR);
+  }
+
+  _judgeText(note, kind) {
+    const s = JUDGE_STYLE[kind];
+    this.app.particles.emitText(this._laneX(note), this.app.judgeY - 46, s.t, s.c, kind === "miss" ? 17 : 20);
+  }
+
+  _updateHud() {
+    const sc = this.sc;
+    if (!sc) return;
+    document.getElementById("scoreVal").textContent = sc.score.toLocaleString();
+    const acc = sc.judged ? (sc.weighted / sc.judged) * 100 : 100;
+    document.getElementById("accVal").textContent = acc.toFixed(0) + "%";
+  }
+
+  _toneRate(t) {
+    const s = this.sc.tone[t];
+    return { hit: s.hit, total: s.total, rate: s.total ? (s.hit / s.total) * 100 : 100 };
+  }
+
+  /* ---------- 종료 → 결과 ---------- */
+  _finish() {
+    this.state = "result";
+    const sc = this.sc;
+    const acc = sc.total ? (sc.weighted / sc.total) * 100 : 0;
+    const grade = GRADES.find(g => acc >= g.min).g;
+    const result = {
+      score: sc.score, maxCombo: sc.maxCombo, accuracy: acc, grade,
+      counts: { ...sc.counts },
+      toneStats: { bass: this._toneRate("bass"), slap: this._toneRate("slap") }
+    };
+    let flags = null;
+    if (this.mode !== "practice") flags = this.app.progress.update(this.rhythm.id, result);
+    this._showResult(result, flags);
+  }
+
+  _showResult(result, flags) {
+    const app = this.app;
+    const r = this.rhythm;
+    const d = DIFFICULTY_CONFIG[r.difficulty];
+    const practice = this.mode === "practice";
+    const tb = result.toneStats.bass, ts = result.toneStats.slap;
+    let weakLine = "";
+    if (tb.total >= 4 && ts.total >= 4 && Math.abs(tb.rate - ts.rate) >= 8) {
+      const weak = tb.rate < ts.rate ? "둥(베이스톤)" : "딱(슬랩톤)";
+      weakLine = `<br>${weak} 타이밍을 조금 더 연습해보세요.`;
+    }
+    const recId = app.library.recommendNext(r.id, result, app.progress);
+    const recR = app.library.byId(recId) || r;
+    const recCopy = result.accuracy >= 95 ? "완벽해요! 다음 난이도에 도전해볼까요?"
+      : result.accuracy >= 82 ? "좋아요. 다음 리듬으로 그루브를 넓혀봐요."
+      : result.accuracy >= 65 ? "기본기가 잡혔어요. 같은 난이도의 다른 리듬은 어때요?"
+      : "같은 리듬을 연습 모드로 한 번 더 다져봐요.";
+    const nb = k => (!practice && flags && flags[k]) ? `<span class="new-best">NEW</span>` : "";
+
+    document.getElementById("resultBody").innerHTML = `
+      <div class="res-rhythm">${d.badge} ${r.titleKo} · ${d.label}${practice ? " · 연습 모드" : ""}</div>
+      <div class="grade-circle" style="background:${GRADE_COLOR[result.grade]}">${result.grade}</div>
+      <div class="res-score">${result.score.toLocaleString()}점${nb("newScore")}</div>
+      <div class="res-grid">
+        <div style="color:#e8a013"><strong>${result.counts.perfect}</strong><span>PERFECT</span></div>
+        <div style="color:#3f9d4e"><strong>${result.counts.great}</strong><span>GREAT</span></div>
+        <div style="color:#4a7bd0"><strong>${result.counts.good}</strong><span>GOOD</span></div>
+        <div style="color:#c0392b"><strong>${result.counts.miss}</strong><span>MISS</span></div>
+      </div>
+      <div class="res-grid" style="grid-template-columns:1fr 1fr">
+        <div><strong>${result.accuracy.toFixed(1)}%${nb("newAcc")}</strong><span>정확도</span></div>
+        <div><strong>${result.maxCombo}${nb("newCombo")}</strong><span>최고 콤보</span></div>
+      </div>
+      <div class="tone-rates">
+        <div class="tone-rate">둥 (베이스톤) ${Math.round(tb.rate)}% <span style="color:#a08866">(${tb.hit}/${tb.total})</span>
+          <div class="bar"><i style="width:${tb.rate}%;background:#b35a17"></i></div></div>
+        <div class="tone-rate">딱 (슬랩톤) ${Math.round(ts.rate)}% <span style="color:#a08866">(${ts.hit}/${ts.total})</span>
+          <div class="bar"><i style="width:${ts.rate}%;background:#c0392b"></i></div></div>
+      </div>
+      <p class="res-feedback">${GRADE_FEEDBACK[result.grade]}${weakLine}</p>
+      ${practice ? `<p class="res-reco">연습 모드 기록은 저장되지 않아요.</p>` : ""}
+      <p class="res-reco">다음 추천: <b>${recR.titleKo}</b> — ${recCopy}</p>
+      <div class="btn-row two">
+        <button id="resRetry" class="btn-primary">다시 하기</button>
+        <button id="resSelect" class="btn-secondary">다른 리듬</button>
+      </div>
+      <div class="btn-row two">
+        <button id="resPractice" class="btn-secondary">${practice ? "일반 모드로" : "연습 모드"}</button>
+        <button id="resHome" class="btn-secondary">처음으로</button>
+      </div>`;
+    document.getElementById("resultModal").classList.remove("hidden");
+    document.getElementById("resRetry").addEventListener("click", () => this.start(r.id, this.mode));
+    document.getElementById("resSelect").addEventListener("click", () => this.quitToSelect());
+    document.getElementById("resPractice").addEventListener("click", () => this.start(r.id, practice ? "normal" : "practice"));
+    document.getElementById("resHome").addEventListener("click", () => {
+      this.state = "idle";
+      document.getElementById("resultModal").classList.add("hidden");
+      document.getElementById("introOverlay").classList.remove("hidden");
+      app.setMode("free");
+    });
+  }
+
+  /* ---------- 게임 화면 렌더링 (레인/노트/판정선/카운트다운) ---------- */
+  render(ctx) {
+    if (this.state === "idle") return;
+    const app = this.app;
+    const { judgeY, laneX, cx } = app;
+    if (!laneX) return;
+    const nr = app.noteR();
+    const now = performance.now();
+    const gt = this.state === "paused" ? this.gameTime(this._pausedAt) : this.gameTime(now);
+
+    ctx.save();
+
+    // 레인 가이드 라인
+    ctx.strokeStyle = "rgba(42,28,16,0.06)";
+    ctx.lineWidth = 2;
+    for (const x of [laneX.slapL, laneX.bass, laneX.slapR]) {
+      ctx.beginPath(); ctx.moveTo(x, 8); ctx.lineTo(x, judgeY); ctx.stroke();
+    }
+    // 판정선
+    ctx.strokeStyle = "rgba(42,28,16,0.22)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath();
+    ctx.moveTo(laneX.slapL - nr * 1.8, judgeY);
+    ctx.lineTo(laneX.slapR + nr * 1.8, judgeY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 판정 링 + 톤 라벨
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const rings = [[laneX.slapL, "딱", "#c0392b"], [laneX.bass, "둥", "#b35a17"], [laneX.slapR, "딱", "#c0392b"]];
+    for (const [x, label, col] of rings) {
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, judgeY, nr + 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = col;
+      ctx.font = `900 ${Math.round(nr * 0.55)}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.fillText(label, x, judgeY + nr + 20);
+    }
+    ctx.globalAlpha = 1;
+
+    // 노트 (시간순 정렬 — approach 밖 미래 노트에서 중단)
+    const spawnY = -nr * 2;
+    for (const n of this.notes) {
+      const tl = n.hitTimeMs - gt;
+      if (tl > this.approach) break;
+      if (n.status === "hit") continue;
+      const x = this._laneX(n);
+      if (n.status === "miss") {
+        const mp = (gt - n.missAt) / 320;
+        if (mp >= 1 || mp < 0) continue;
+        ctx.globalAlpha = (1 - mp) * 0.5;
+        this._drawNote(ctx, x, judgeY + mp * 46, n.tone, nr * (1 - mp * 0.2));
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      const p = 1 - tl / this.approach; // 0(출현) → 1(판정선)
+      const y = spawnY + (judgeY - spawnY) * p;
+      ctx.globalAlpha = clamp(p * 2.4, 0, 1);
+      this._drawNote(ctx, x, y, n.tone, nr);
+      ctx.globalAlpha = 1;
+    }
+
+    // 콤보
+    if (this.sc && this.sc.combo >= 2) {
+      const pop = 1 + 0.35 * Math.max(0, 1 - (now - this._comboPopT) / 180);
+      ctx.save();
+      ctx.translate(cx, Math.max(70, judgeY * 0.22));
+      ctx.scale(pop, pop);
+      ctx.font = `900 ${Math.round(nr * 1.05)}px Pretendard, "Apple SD Gothic Neo", sans-serif`;
+      ctx.fillStyle = "#8a5a2a";
+      ctx.fillText(`${this.sc.combo} COMBO`, 0, 0);
+      ctx.restore();
+    }
+
+    // 카운트다운 / START!
+    if (gt < 0) {
+      const stepF = -gt / 1000;
+      const num = Math.ceil(stepF);
+      const prog = num - stepF; // 해당 숫자의 진행 0→1
+      const scale = 0.8 + 0.5 * easeOutCubic(Math.min(1, prog * 2.2));
+      const alpha = prog < 0.8 ? 1 : 1 - (prog - 0.8) / 0.2;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.translate(cx, app.h * 0.40);
+      ctx.scale(scale, scale);
+      ctx.font = `900 ${Math.round(app.R * 0.7)}px Pretendard, sans-serif`;
+      ctx.lineWidth = 10;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(255,252,244,0.95)";
+      ctx.strokeText(num, 0, 0);
+      ctx.fillStyle = "#b35a17";
+      ctx.fillText(num, 0, 0);
+      ctx.restore();
+    } else if (this._startFlashT > 0 && now - this._startFlashT < 650) {
+      const fp = (now - this._startFlashT) / 650;
+      ctx.save();
+      ctx.globalAlpha = 1 - fp;
+      ctx.translate(cx, app.h * 0.40);
+      const s = 1 + fp * 0.25;
+      ctx.scale(s, s);
+      ctx.font = `900 ${Math.round(app.R * 0.42)}px Pretendard, sans-serif`;
+      ctx.lineWidth = 8;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(255,252,244,0.95)";
+      ctx.strokeText("START!", 0, 0);
+      ctx.fillStyle = "#3f9d4e";
+      ctx.fillText("START!", 0, 0);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  /* 노트 1개 그리기 — 둥(채운 원) / 딱(링) */
+  _drawNote(ctx, x, y, tone, r) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (tone === "bass") {
+      const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.2, 0, 0, r);
+      g.addColorStop(0, "#d07a2e");
+      g.addColorStop(1, "#8a3d12");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.lineWidth = Math.max(1.5, r * 0.09);
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = `900 ${Math.round(r * 0.72)}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.fillText("둥", 0, 1);
+    } else {
+      ctx.fillStyle = "#fff7ec";
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#c0392b";
+      ctx.lineWidth = Math.max(2.5, r * 0.17);
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.80, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#c0392b";
+      ctx.font = `900 ${Math.round(r * 0.62)}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.fillText("딱", 0, 1);
+    }
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   NantaApp — 앱 본체 (입력/레이아웃/렌더링/상태)
+   ============================================================ */
+class NantaApp {
+  constructor() {
+    this.canvas = document.getElementById("stage");
+    this.ctx = this.canvas.getContext("2d");
+    this.audio = new AudioEngine();
+    this.particles = new ParticleSystem();
+    this.stickL = new Stick(-1);
+    this.stickR = new Stick(1);
+
+    this.cx = 0; this.cy = 0; this.R = 100;
+    this.counts = { bass: 0, slap: 0 };
+    this.spaceSide = -1;                       // Space 연타 시 양손 번갈아 사용
+    this.hintAlpha = { bass: 1, slap: 1 };     // 존 안내 라벨(몇 번 치면 사라짐)
+    this.shake = { pulseT: -9, jitterT: -9 };  // 북 흔들림 타이머
+    this.lastT = performance.now();
+    this.started = false;
+
+    this.images = {};
+
+    // ----- 리듬 게임 구성요소 -----
+    this.mode = "free";                              // free | game
+    this.settings = new Settings();
+    this.audio.volume = this.settings.data.volume;   // 저장된 음량 적용
+    this.progress = new ProgressManager();
+    this.library = new RhythmLibrary();
+    this.game = new RhythmGame(this);
+    this.rsUI = new RhythmSelectUI(this);
+    this.judgeY = 0;
+    this.laneX = null;
+
+    this._loadImages();
+    this._bindUI();
+    this._bindInput();
+    this._resize();
+    window.addEventListener("resize", () => this._resizeDebounced());
+    window.addEventListener("orientationchange", () => this._resizeDebounced());
+
+    requestAnimationFrame(t => this._frame(t));
+  }
+
+  /* ---------- 에셋 로딩 (없어도 동작) ---------- */
+  _loadImages() {
+    for (const [key, url] of Object.entries(ASSETS)) {
+      const img = new Image();
+      img.onload = () => { this.images[key] = img; };
+      img.onerror = () => { console.warn(`[난타] 이미지 누락: ${url} — 대체 그래픽으로 표시합니다.`); };
+      img.src = encodeURI(url);
+    }
+  }
+
+  /* ---------- UI 바인딩 ---------- */
+  _bindUI() {
+    const muteBtn = document.getElementById("muteBtn");
+    const helpBtn = document.getElementById("helpBtn");
+    const startBtn = document.getElementById("startBtn");
+    const overlay = document.getElementById("introOverlay");
+
+    // 음소거 설정 복원 (프라이빗 모드 등 localStorage 불가 환경 대비)
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch { /* 무시 */ } }
+    };
+    const savedMute = store.get("nanta.muted") === "1";
+    this.audio.setMuted(savedMute);
+    muteBtn.textContent = savedMute ? "🔇" : "🔊";
+
+    muteBtn.addEventListener("click", () => {
+      const m = !this.audio.muted;
+      this.audio.setMuted(m);
+      muteBtn.textContent = m ? "🔇" : "🔊";
+      store.set("nanta.muted", m ? "1" : "0");
+    });
+
+    helpBtn.addEventListener("click", () => {
+      overlay.classList.remove("hidden");
+    });
+
+    // 리듬 게임 시작 → 리듬 선택 화면으로
+    startBtn.addEventListener("click", () => {
+      this.audio.ensure();   // 사용자 제스처 안에서 AudioContext 활성화
+      this.started = true;
+      overlay.classList.add("hidden");
+      this.rsUI.open();
+    });
+
+    // 자유 연주
+    document.getElementById("freePlayBtn").addEventListener("click", () => {
+      this.audio.ensure();
+      this.started = true;
+      overlay.classList.add("hidden");
+      this.setMode("free");
+    });
+
+    document.getElementById("settingsBtn").addEventListener("click", () => this.openSettings());
+    document.getElementById("pauseBtn").addEventListener("click", () => this.game.togglePause());
+
+    // 시작 화면에서 Enter로도 시작
+    window.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !overlay.classList.contains("hidden")) startBtn.click();
+    });
+
+    this._settingsUI();   // 설정 모달 바인딩
+    this.setMode("free"); // 초기 HUD/안내문 구성
+  }
+
+  /* ---------- 입력 바인딩 ---------- */
+  _bindInput() {
+    // 포인터(마우스+터치+펜 통합, 멀티터치 지원) — click과 중복되지 않음
+    this.canvas.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      this.audio.ensure();
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      this.handleHit(x, y, e.pointerType);
+    }, { passive: false });
+
+    // 롱프레스 메뉴/더블탭 확대 방지
+    this.canvas.addEventListener("contextmenu", e => e.preventDefault());
+    document.addEventListener("gesturestart", e => e.preventDefault());
+
+    // 키보드: F/J = 베이스(중앙), D/K = 슬랩(테두리), Space = 양손 베이스 번갈아
+    window.addEventListener("keydown", e => {
+      // Esc: 설정 닫기 → 선택 화면 뒤로 → 게임 일시정지
+      if (e.code === "Escape") {
+        const settings = document.getElementById("settingsModal");
+        if (!settings.classList.contains("hidden")) { settings.classList.add("hidden"); return; }
+        if (!this.rsUI.el.classList.contains("hidden")) { document.getElementById("rsBackBtn").click(); return; }
+        if (this.mode === "game") this.game.togglePause();
+        return;
+      }
+      if (e.repeat || !this.started) return;
+      // 오버레이/모달이 떠 있는 동안은 연주 입력 무시
+      if (!document.getElementById("introOverlay").classList.contains("hidden")) return;
+      if (!this.rsUI.el.classList.contains("hidden")) return;
+      if (!document.getElementById("settingsModal").classList.contains("hidden")) return;
+      if (this.mode === "game" && this.game.state === "paused") return;
+      if (e.code === "Space") e.preventDefault(); // 스크롤 방지
+      const R = this.R, cx = this.cx, cy = this.cy;
+      switch (e.code) {
+        case "KeyF": this.handleHit(cx - R * 0.20, cy + R * 0.04, "key"); break;
+        case "KeyJ": this.handleHit(cx + R * 0.20, cy + R * 0.04, "key"); break;
+        case "KeyD": this.handleHit(cx - R * 0.66, cy - R * 0.50, "key"); break;
+        case "KeyK": this.handleHit(cx + R * 0.66, cy - R * 0.50, "key"); break;
+        case "Space": {
+          this.spaceSide = -this.spaceSide;
+          this.handleHit(cx + this.spaceSide * R * 0.20, cy + R * 0.04, "key");
+          break;
+        }
+      }
+    });
+  }
+
+  /* ---------- 타격 처리(입력 → 사운드/애니메이션/이펙트) ---------- */
+  handleHit(x, y, source) {
+    const dx = x - this.cx, dy = y - this.cy;
+    const d = Math.hypot(dx, dy);
+    const inDrum = d <= this.R * CONFIG.drum.hitOuterRatio;
+
+    let tone, sx = x, sy = y; // sx/sy = 난타채가 실제로 타격할 지점
+    if (inDrum) {
+      tone = d <= this.R * CONFIG.drum.bassZoneRatio ? "bass" : "slap";
+    } else if (this.mode === "game") {
+      // 게임 중에는 북 바깥 터치도 허용: 화면 좌우 1/3 = 슬랩, 중앙 = 베이스
+      tone = (x < this.w / 3 || x > this.w * 2 / 3) ? "slap" : "bass";
+      const side = x < this.cx ? -1 : 1;
+      if (tone === "bass") { sx = this.cx + side * this.R * 0.18; sy = this.cy + this.R * 0.04; }
+      else { sx = this.cx + side * this.R * 0.66; sy = this.cy - this.R * 0.50; }
+    } else {
+      return; // 자유 연주에선 북 바깥 무시
+    }
+
+    const now = performance.now();
+
+    // 1) 사운드는 무조건 즉시 (연주감의 핵심 — 판정 성공 여부와 무관)
+    this.audio.play(tone, 0.85 + Math.random() * 0.3);
+
+    // 2) 해당 방향의 난타채가 타격
+    const stick = sx < this.cx ? this.stickL : this.stickR;
+    stick.strike(sx, sy, now);
+
+    // 3) 타격 지점 이펙트 + 북 흔들림
+    if (tone === "bass") {
+      this.particles.emitBass(sx, sy, this.R);
+      this.shake.pulseT = now;
+    } else {
+      this.particles.emitSlap(sx, sy, this.R);
+      this.shake.jitterT = now;
+    }
+
+    // 4) 모드별 처리
+    if (this.mode === "free") {
+      // 자유 연주: 의성어 텍스트 + 카운트
+      this.particles.emitText(
+        sx, sy - this.R * (tone === "bass" ? 0.16 : 0.14),
+        tone === "bass" ? "둥!" : "딱!",
+        tone === "bass" ? "#a4561a" : "#c0392b",
+        this.R * (tone === "bass" ? 0.15 : 0.13)
+      );
+      this.counts[tone]++;
+      document.getElementById(tone === "bass" ? "bassCount" : "slapCount").textContent = this.counts[tone];
+    } else {
+      // 리듬 게임: 판정으로 전달
+      this.game.handleInput(tone);
+    }
+
+    // 5) 모바일 햅틱
+    if (source === "touch" && this.settings.data.vibrate && navigator.vibrate) {
+      navigator.vibrate(tone === "bass" ? 16 : 9);
+    }
+  }
+
+  /* ---------- 레이아웃/리사이즈 ---------- */
+  _resizeDebounced() {
+    clearTimeout(this._rzTimer);
+    this._rzTimer = setTimeout(() => this._resize(), 120);
+  }
+
+  _resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const w = window.innerWidth, h = window.innerHeight;
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 이후 좌표는 CSS 픽셀 기준
+    this.w = w; this.h = h;
+
+    this.cx = w / 2;
+    if (this.mode === "game") {
+      // 게임 모드: 북을 작게 아래로 — 위쪽은 노트 낙하 공간
+      this.R = Math.max(92, Math.min(w * 0.34, h * 0.225));
+      this.cy = h - this.R - Math.max(46, h * 0.06);
+      this.judgeY = this.cy - this.R - Math.max(26, this.R * 0.22);
+      const slapOff = Math.min(this.cx - this.noteR() - 10, this.R * 1.25);
+      this.laneX = { slapL: this.cx - slapOff, bass: this.cx, slapR: this.cx + slapOff };
+    } else {
+      this.cy = h * CONFIG.drum.cyRatio;
+      this.R = Math.max(110, Math.min(w * CONFIG.drum.radiusRatioW, h * CONFIG.drum.radiusRatioH));
+      this.judgeY = 0;
+      this.laneX = null;
+    }
+
+    this.stickL.setLayout(this.cx, this.cy, this.R);
+    this.stickR.setLayout(this.cx, this.cy, this.R);
+    this.particles.items.length = 0; // 좌표계가 바뀌므로 이펙트 정리
+  }
+
+  /* ---------- 북 그리기 ---------- */
+  _drawDrum(ctx) {
+    const { cx, cy, R } = this;
+
+    // 북면: 실사 이미지(원형 클리핑) 또는 대체 그래픽
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.995, 0, Math.PI * 2);
+    ctx.clip();
+
+    const img = this.images.drumHead;
+    if (img) {
+      // 사진 속 북면 원(CONFIG.photo)을 화면의 북 원에 맞춰 스케일링
+      // (사진의 북면이 약간 타원이라 가로/세로를 따로 늘려 정원으로 보정)
+      const ph = CONFIG.photo;
+      const dw = (R * ph.overscan) / ph.rx;
+      const dh = (R * ph.overscan) / ph.ry;
+      ctx.drawImage(img, cx - ph.cx * dw, cy - ph.cy * dh, dw, dh);
+    } else {
+      // 대체 그래픽: 가죽 북면 + 테두리 + 못 장식
+      const g = ctx.createRadialGradient(cx - R * 0.2, cy - R * 0.25, R * 0.1, cx, cy, R);
+      g.addColorStop(0, "#e6d2a7");
+      g.addColorStop(0.55, "#d9c194");
+      g.addColorStop(0.85, "#cbae7e");
+      g.addColorStop(1, "#b8986a");
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      // 중앙 사용감
+      const wear = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.38);
+      wear.addColorStop(0, "rgba(120,90,50,0.20)");
+      wear.addColorStop(1, "rgba(120,90,50,0)");
+      ctx.fillStyle = wear;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      // 가장자리 링 + 못
+      ctx.strokeStyle = "#9a7b50";
+      ctx.lineWidth = R * 0.05;
+      ctx.beginPath(); ctx.arc(cx, cy, R * 0.955, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#4a3a26";
+      for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * R * 0.90, cy + Math.sin(a) * R * 0.90, R * 0.013, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 입체감: 가장자리 음영 + 좌상단 은은한 빛
+    const shade = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+    shade.addColorStop(0, "rgba(90,60,30,0)");
+    shade.addColorStop(1, "rgba(90,60,30,0.16)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.restore();
+
+    // 바깥 외곽선(바닥과 분리되어 보이게)
+    ctx.strokeStyle = "rgba(60,38,18,0.35)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.998, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  /* ---------- 존 안내(점선 원 + 라벨) ---------- */
+  _drawZoneHints(ctx, dt) {
+    const { cx, cy, R } = this;
+    // 베이스/슬랩을 2번 이상 치면 해당 라벨이 서서히 사라짐
+    if (this.counts.bass >= 2) this.hintAlpha.bass = Math.max(0, this.hintAlpha.bass - dt * 1.2);
+    if (this.counts.slap >= 2) this.hintAlpha.slap = Math.max(0, this.hintAlpha.slap - dt * 1.2);
+
+    const zoneA = Math.max(this.hintAlpha.bass, this.hintAlpha.slap);
+    if (zoneA > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = zoneA;
+      ctx.strokeStyle = "rgba(70,45,20,0.28)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 9]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * CONFIG.drum.bassZoneRatio, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if (this.hintAlpha.bass > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = this.hintAlpha.bass * 0.55;
+      ctx.font = `800 ${Math.round(R * 0.085)}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.fillStyle = "#6b4a26";
+      ctx.fillText("베이스톤 · 둥", cx, cy + R * 0.30);
+      ctx.restore();
+    }
+    if (this.hintAlpha.slap > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = this.hintAlpha.slap * 0.55;
+      ctx.font = `800 ${Math.round(R * 0.075)}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.fillStyle = "#7a3a26";
+      ctx.fillText("슬랩톤 · 딱", cx, cy - R * 0.80);
+      ctx.restore();
+    }
+  }
+
+  /* ---------- 모드 전환 (free ↔ game) ---------- */
+  setMode(mode) {
+    this.mode = mode;
+    const game = mode === "game";
+    document.getElementById("freeStat").classList.toggle("hidden", game);
+    document.getElementById("gameStat").classList.toggle("hidden", !game);
+    document.getElementById("pauseBtn").classList.toggle("hidden", !game);
+    document.getElementById("helpBtn").classList.toggle("hidden", game);
+    document.getElementById("progressBar").classList.toggle("hidden", !game);
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    document.getElementById("bottomHint").innerHTML = game
+      ? `노트가 판정선에 닿는 순간! 중앙 = <b class="bass">둥</b> · 테두리 = <b class="slap">딱</b>`
+      : `중앙 = <b class="bass">베이스톤 둥</b> · 테두리 = <b class="slap">슬랩톤 딱</b>` +
+        (coarse ? "" : ` &nbsp;|&nbsp; 키보드 F·J 베이스 / D·K 슬랩 / Space`);
+    this._resize(); // 모드별 북 크기/판정선 재계산
+  }
+
+  /* 노트 반지름 (북 크기에 비례) */
+  noteR() {
+    return clamp(this.R * 0.17, 19, 30);
+  }
+
+  /* ---------- 설정 모달 ---------- */
+  openSettings() {
+    document.getElementById("settingsModal").classList.remove("hidden");
+  }
+
+  _settingsUI() {
+    const S = this.settings;
+    const modal = document.getElementById("settingsModal");
+    const vol = document.getElementById("setVolume");
+    const volVal = document.getElementById("setVolumeVal");
+    const off = document.getElementById("setOffset");
+    const offVal = document.getElementById("setOffsetVal");
+    const speedSeg = document.getElementById("setSpeed");
+    const tick = document.getElementById("setTick");
+    const vib = document.getElementById("setVibrate");
+
+    const reflect = () => {
+      vol.value = Math.round(S.data.volume * 100);
+      volVal.textContent = vol.value + "%";
+      off.value = S.data.offsetMs;
+      offVal.textContent = (S.data.offsetMs > 0 ? "+" : "") + S.data.offsetMs + "ms";
+      speedSeg.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.v === S.data.noteSpeed));
+      tick.classList.toggle("on", S.data.tick);
+      vib.classList.toggle("on", S.data.vibrate);
+    };
+    vol.addEventListener("input", () => {
+      S.data.volume = vol.value / 100;
+      this.audio.setVolume(S.data.volume);
+      S.save(); reflect();
+    });
+    off.addEventListener("input", () => {
+      S.data.offsetMs = parseInt(off.value, 10) || 0;
+      S.save(); reflect();
+    });
+    speedSeg.addEventListener("click", e => {
+      const b = e.target.closest("button[data-v]");
+      if (!b) return;
+      S.data.noteSpeed = b.dataset.v;
+      S.save(); reflect();
+    });
+    tick.addEventListener("click", () => { S.data.tick = !S.data.tick; S.save(); reflect(); });
+    vib.addEventListener("click", () => { S.data.vibrate = !S.data.vibrate; S.save(); reflect(); });
+    document.getElementById("settingsClose").addEventListener("click", () => modal.classList.add("hidden"));
+    reflect();
+  }
+
+  /* ---------- 메인 루프 ---------- */
+  _frame(t) {
+    const dt = Math.min(0.05, (t - this.lastT) / 1000);
+    this.lastT = t;
+
+    this.stickL.update(t);
+    this.stickR.update(t);
+    this.game.update(t);
+    this.particles.update(dt);
+    this._render(dt, t);
+
+    requestAnimationFrame(tt => this._frame(tt));
+  }
+
+  _render(dt, now) {
+    const ctx = this.ctx;
+    const { cx, cy, R, w, h } = this;
+    ctx.clearRect(0, 0, w, h);
+
+    // 바닥 그림자(타원)
+    ctx.save();
+    ctx.translate(cx, cy + R * 0.06);
+    ctx.scale(1, 0.96);
+    const fg = ctx.createRadialGradient(0, 0, R * 0.5, 0, 0, R * 1.22);
+    fg.addColorStop(0, "rgba(70,45,20,0.16)");
+    fg.addColorStop(1, "rgba(70,45,20,0)");
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.22, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // 북 흔들림: 베이스 = 스케일 펄스, 슬랩 = 미세 지터
+    let scale = 1, ox = 0, oy = 0;
+    const pulseP = (now - this.shake.pulseT) / 240;
+    if (pulseP >= 0 && pulseP < 1) scale = 1 - 0.016 * Math.sin(pulseP * Math.PI);
+    const jitterP = (now - this.shake.jitterT) / 90;
+    if (jitterP >= 0 && jitterP < 1) {
+      const m = 2.6 * (1 - jitterP);
+      ox = (Math.random() - 0.5) * 2 * m;
+      oy = (Math.random() - 0.5) * 2 * m;
+    }
+
+    ctx.save();
+    ctx.translate(cx + ox, cy + oy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+
+    this._drawDrum(ctx);
+    if (this.mode === "free") this._drawZoneHints(ctx, dt); // 존 안내는 자유 연주에서만
+    this.particles.draw(ctx, "under"); // 링/글로우/먼지 (채 아래)
+    this.stickL.draw(ctx);
+    this.stickR.draw(ctx);
+    this.particles.draw(ctx, "over");  // 스파크 (채 위)
+    ctx.restore();
+
+    // 게임 모드: 레인/노트/판정선/카운트다운
+    if (this.mode === "game") this.game.render(ctx);
+
+    // 플로팅 텍스트는 흔들림과 무관하게 맨 위에
+    this._drawTexts(ctx);
+  }
+
+  /* 플로팅 텍스트 전용 패스 */
+  _drawTexts(ctx) {
+    for (const p of this.particles.items) {
+      if (p.type !== "text") continue;
+      const t = p.life / p.max;
+      const a = 1 - t;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, a * 1.6);
+      const size = p.size * (1 + 0.25 * (1 - Math.pow(1 - Math.min(t * 3, 1), 2)));
+      ctx.font = `900 ${size}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = size * 0.18;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(255,252,244,0.92)";
+      ctx.strokeText(p.str, p.x, p.y);
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.str, p.x, p.y);
+      ctx.restore();
+    }
+  }
+}
+
+/* ---------- 부팅 ---------- */
+window.__nanta = new NantaApp(); // 콘솔 디버깅용 전역 노출
+</script>
+</body>
+</html>
